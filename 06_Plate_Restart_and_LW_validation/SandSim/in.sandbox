@@ -3,7 +3,7 @@
 ### allowing them to settle under the force of gravity and saving their state for later runs 
 
 
-### Variables
+### Variables ----------------------------------------------------------------------------------------
 
 variable youngmod equal 1.0e7
 variable poisson equal 0.3
@@ -34,7 +34,7 @@ variable zlo equal -0.2
 variable fdump equal 1000
 
 
-### Initialization
+### Initialization -----------------------------------------------------------------------------------
 
 units si
 atom_style sphere
