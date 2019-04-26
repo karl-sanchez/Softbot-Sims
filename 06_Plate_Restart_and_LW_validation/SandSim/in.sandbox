@@ -1,0 +1,121 @@
+### Reservoir Initialization
+### This simulation involves inserting a set of particles into a cylindrical domain
+### allowing them to settle under the force of gravity and saving their state for later runs 
+
+
+### Variables
+
+variable youngmod equal 1.0e7
+variable poisson equal 0.3
+variable crest equal 0.65
+variable cfric equal 1
+variable rho equal 1260
+
+variable nmaterials equal 2
+
+
+variable nP equal 1000000
+variable tStep equal 1.0e-4
+variable prate equal 50000
+variable tSettle equal ${nP}/${prate}/${tStep}+1/${tStep}
+
+print "tSettle = ${tSettle}"
+
+variable minRad equal 0.003
+variable ndist equal 2*${minRad}
+
+variable yhi equal 0.5
+variable ylo equal -0.1
+variable xhi equal 0.3
+variable xlo equal -0.3
+variable zhi equal 0.3
+variable zlo equal -0.2
+
+variable fdump equal 1000
+
+
+### Initialization
+
+units si
+atom_style sphere
+atom_modify map array
+boundary f f f
+newton off
+communicate single vel yes
+
+# Declare domain
+region domain block ${xlo} ${xhi} ${ylo} ${yhi} ${zlo} ${zhi} units box
+create_box 2 domain
+
+# Neighbor listing
+neighbor ${ndist} bin
+neigh_modify every 1 check no delay 0
+
+
+### Setup -------------------------------------------------------------------------------------------
+
+# Material and interaction properties required
+fix m1 all property/global youngsModulus peratomtype ${youngmod} ${youngmod}
+fix m2 all property/global poissonsRatio peratomtype 0.3 0.3
+fix m3 all property/global coefficientRestitution peratomtypepair 2 ${crest} ${crest} ${crest} ${crest}
+fix m4 all property/global coefficientFriction peratomtypepair 2 ${cfric} 0 0 ${cfric}
+
+# Particle insertion
+
+fix pts1 all particletemplate/sphere 49979693 atom_type 1 density constant ${rho} radius constant ${minRad}
+fix pdd all particledistribution/discrete 32452843 1 pts1 1.0
+
+# Insertion region
+region reservoir block ${xlo} ${xhi} ${ylo} ${yhi} 0.0 ${zhi} units box
+
+fix ins all insert/rate/region seed 49979687 distributiontemplate pdd &
+nparticles ${nP} particlerate ${prate} insert_every 1000 &
+overlapcheck yes vel constant 0. 0. 0. region reservoir ntry_mc 10000
+
+
+# Define the physics
+pair_style gran model hertz tangential history
+pair_coeff * *
+
+
+### Import CAD / Generate Solids --------------------------------------------------------------------
+
+# Add a granular wall at the floor of the bounding box too
+fix zwalls1 all wall/gran model hertz tangential history primitive type 1 zplane ${zlo}
+fix zwalls2 all wall/gran model hertz tangential history primitive type 1 zplane ${zhi}
+fix xwalls1 all wall/gran model hertz tangential history primitive type 1 xplane ${xlo}
+fix xwalls2 all wall/gran model hertz tangential history primitive type 1 xplane ${xhi}
+fix ywalls1 all wall/gran model hertz tangential history primitive type 1 yplane ${ylo}
+fix ywalls2 all wall/gran model hertz tangential history primitive type 1 yplane ${yhi}
+
+### Detailed Settings -------------------------------------------------------------------------------
+
+# Integrator
+fix integrator all nve/sphere
+
+# Gravity
+fix grav all gravity 9.81 vector 0.0 0.0 -1.0
+
+# Time step
+timestep ${tStep}
+
+### Thermodynamic output settings
+# none
+
+# Check time step and initialize dump file
+fix ctg all check/timestep/gran 1 0.01 0.01
+run 1
+unfix ctg
+
+# Dump Files for Post-Processing --------------------------------------------------------------------
+
+dump dmp all custom/vtk ${fdump} postInit/plate_*.vtk id type type x y z ix iy iz vx vy vz fx fy fz omegax omegay omegaz radius 
+
+# Run simulation for N time steps ------------------------------------------------------------------
+
+# Allow Particles to settle
+run ${tSettle}
+
+# Save Reservoir for future use
+
+write_restart restart/restart.equil

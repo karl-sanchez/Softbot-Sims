@@ -1,0 +1,101 @@
+### Reservoir Initialization
+### This simulation involves inserting a set of particles into a cylindrical domain
+### allowing them to settle under the force of gravity and saving their state for later runs 
+
+
+### Variables
+variable nP equal 50000
+variable tStep equal 1.0e-4
+variable tSettle equal 20000
+variable vmax equal 0.02
+variable accel equal 0.01
+variable rcyl equal 0.3
+variable rbottom equal -0.5
+### Initialization
+
+units si
+atom_style sphere
+atom_modify map array
+boundary f f f
+newton off
+communicate single vel yes
+
+# Declare domain
+# region domain block -0.5 0.5 -0.5 0.5 ${rbottom} 0.5 units box
+region domain cylinder z 0 0 0.3 ${rbottom} 0.5 units box
+
+create_box 2 domain
+
+# Neighbor listing
+neighbor 0.01 bin
+neigh_modify every 1 check no delay 0
+
+### Setup -------------------------------------------------------------------------------------------
+
+# Material and interaction properties required
+fix m1 all property/global youngsModulus peratomtype 1.0e7 1.0e7
+fix m2 all property/global poissonsRatio peratomtype 0.25 0.25
+fix m3 all property/global coefficientRestitution peratomtypepair 2 0.65 0.65 0.65 0.65
+fix m4 all property/global coefficientFriction peratomtypepair 2 1 1 1 1
+fix m5 all property/global cohesionEnergyDensity peratomtypepair 2 50 0 0 50
+fix m6 all property/global coefficientRollingFriction peratomtypepair 2 0.04 0.04 0.04 0.04
+
+# Particle insertion
+
+fix pts1 all particletemplate/sphere 49979693 atom_type 1 density constant 3110 radius constant 0.005
+fix pts2 all particletemplate/sphere 15485863 atom_type 1 density constant 3110 radius constant 0.01
+fix pts3 all particletemplate/sphere 15485867 atom_type 1 density constant 3110 radius constant 0.03
+fix pts4 all particletemplate/sphere 67867967 atom_type 1 density constant 3110 radius constant 0.05
+fix pdd all particledistribution/discrete 32452843 4 pts1 0.60 pts2 0.25 pts3 0.1 pts4 0.05
+
+
+# region reservoir block -0.5 0.5 -0.5 0.5 -1.0 0.0 units box
+region reservoir cylinder z 0 0 ${rcyl} ${rbottom} 0 units box
+
+fix ins all insert/rate/region seed 49979687 distributiontemplate pdd &
+nparticles ${nP} particlerate 15000 insert_every 1000 &
+overlapcheck yes vel constant 0. 0. 0. region reservoir ntry_mc 10000
+
+
+# Define the physics
+pair_style gran model hertz tangential history cohesion sjkr rolling_friction cdt
+pair_coeff * *
+
+
+### Import CAD / Generate Solids --------------------------------------------------------------------
+
+# Add a granular wall at the floor of the bounding box too
+fix zwalls all wall/gran model hertz tangential history primitive type 1 zplane ${rbottom}
+fix cylwall all wall/gran model hertz tangential history primitive type 1 zcylinder ${rcyl} 0 0 
+
+### Detailed Settings -------------------------------------------------------------------------------
+
+# Integrator
+fix integrator all nve/sphere
+
+# Gravity
+fix grav all gravity 9.81 vector 0.0 0.0 -1.0
+
+# Time step
+timestep ${tStep}
+
+### Thermodynamic output settings
+# none
+
+# Check time step and initialize dump file
+fix ctg all check/timestep/gran 1 0.01 0.01
+run 1
+unfix ctg
+
+# Dump Files for Post-Processing --------------------------------------------------------------------
+
+dump dmp all custom/vtk 1000 postInit/plate_*.vtk id type type x y z ix iy iz vx vy vz fx fy fz omegax omegay omegaz radius 
+
+# Run simulation for N time steps ------------------------------------------------------------------
+
+# Allow Particles to settle
+run ${tSettle}
+
+# Save Reservoir for future use
+
+write_restart restart/restart.equil
