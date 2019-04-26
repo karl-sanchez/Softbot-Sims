@@ -1,0 +1,270 @@
+LIGGGHTS (Version LIGGGHTS-PUBLIC 3.8.0, compiled 2018-12-24-10:52:11 by karl, git commit 28301df8853491784b1d8b90533ea89b8c6af1e8)
+### Plate Simulation
+### This simulation involves inserting a set of particles into a large box (the simulation domain),
+### allowing them to settle under the force of gravity, and then inserting a plate into this domain
+
+### Initialization
+
+units si
+atom_style sphere
+atom_modify map array
+boundary f f f
+newton off
+communicate single vel yes
+
+# processors * * *
+
+# Declare domain
+region domain block -0.5 0.5 -0.5 0.5 -1.0 0.5 units box
+create_box 2 domain
+Created orthogonal box = (-0.5 -0.5 -1) to (0.5 0.5 0.5)
+  1 by 2 by 2 MPI processor grid
+
+# Neighbor listing
+neighbor 0.03 bin
+neigh_modify every 1 check no
+
+### Setup -------------------------------------------------------------------------------------------
+
+# Material and interaction properties required
+fix m1 all property/global youngsModulus peratomtype 2.5e7 2.5e7
+fix m2 all property/global poissonsRatio peratomtype 0.25 0.25
+fix m3 all property/global coefficientRestitution peratomtypepair 2 0.5 0.5 0.5 0.5
+fix m4 all property/global coefficientFriction peratomtypepair 2 0.2 0.175 0.175 0.5
+
+# Particle insertion
+
+fix pts all particletemplate/sphere 15485863 atom_type 1 density constant 1000 radius constant 0.015
+fix pdd all particledistribution/discrete 15485867 1 pts 1.0
+region reservoir block -0.5 0.5 -0.5 0.5 -1.0 0.0 units box
+
+fix ins all insert/rate/region seed 32452843 distributiontemplate pdd nparticles 15000 particlerate 15000 insert_every 1000 overlapcheck yes vel constant 0. 0. 0. region reservoir ntry_mc 10000
+
+
+# Define the physics
+pair_style gran model hertz tangential history
+pair_coeff * *
+
+
+### Import CAD / Generate Solids --------------------------------------------------------------------
+
+fix cad1 all mesh/surface file simple_plate.STL type 2 rotate axis 1 0 0 angle 70
+
+# Use the imported mesh as granular wall
+fix geometry all wall/gran model hertz tangential history mesh n_meshes 1 meshes cad1
+
+# Bounding walls of domain
+fix zwalls all wall/gran model hertz tangential history primitive type 1 zplane -1.0
+fix xwalls1 all wall/gran model hertz tangential history primitive type 1 xplane -0.5
+fix xwalls2 all wall/gran model hertz tangential history primitive type 1 xplane 0.5
+fix ywalls1 all wall/gran model hertz tangential history primitive type 1 yplane -0.5
+fix ywalls2 all wall/gran model hertz tangential history primitive type 1 yplane 0.5
+
+
+### Detailed Settings -------------------------------------------------------------------------------
+
+# Integrator
+fix integrator all nve/sphere
+
+# Gravity
+fix grav all gravity 9.81 vector 0.0 0.0 -1.0
+
+# Time step
+timestep 0.0001
+
+### Thermodynamic output settings
+# none
+
+# Check time step and initialize dump file
+fix ctg all check/timestep/gran 1 0.01 0.01
+run 1
+WARNING: It is heavily recommended to use 'neigh_modify delay 0' with granular pair styles (../pair_gran.cpp:237)
+Setting up run at Sat Apr 13 23:51:39 2019
+
+INFO: Particle insertion ins: 1500.000000 particles every 1000 steps - particle rate 15000.000000, (mass rate 2.120575e+02)
+      15000 particles (mass 2.120575e+02) within 10000 steps
+Memory usage per processor = 6.82777 Mbytes
+    Step    Atoms         KinEng            CPU 
+       0        0              0              0 
+INFO: Particle insertion ins: inserted 1500 particle templates (mass 2.120575e+01) at step 1
+ - a total of 1500 particle templates (mass 2.120575e+01) inserted so far.
+WARNING: time-step is 19.467302 % of rayleigh time (../fix_check_timestep_gran.cpp:200)
+WARNING: time-step is 1.274368 % of hertz time (../fix_check_timestep_gran.cpp:208)
+       1     1500  2.5509484e-06    0.003116163 
+Loop time of 0.00314488 on 4 procs for 1 steps with 1500 atoms, finish time Sat Apr 13 23:51:39 2019
+
+
+Pair  time (%) = 2.16615e-05 (0.688785)
+Neigh time (%) = 0.000306746 (9.75382)
+Comm  time (%) = 0.000269668 (8.57481)
+Outpt time (%) = 9.63572e-05 (3.06394)
+Other time (%) = 0.00245045 (77.9187)
+
+Nlocal:    375 ave 567 max 182 min
+Histogram: 2 0 0 0 0 0 0 0 0 2
+Nghost:    69.5 ave 90 max 49 min
+Histogram: 1 1 0 0 0 0 0 0 1 1
+Neighs:    233 ave 377 max 104 min
+Histogram: 2 0 0 0 0 0 0 0 1 1
+
+Total # of neighbors = 932
+Ave neighs/atom = 0.621333
+Neighbor list builds = 1
+Dangerous builds = 0
+unfix ctg
+
+#Create imaging information
+
+dump dumpstl all stl 2000 post/dump*.stl
+
+dump dmp all custom/vtk 2000 post/plate_*.vtk id type type x y z ix iy iz vx vy vz fx fy fz omegax omegay omegaz radius
+
+# Run simulation for N time steps
+
+# Allow Particles to settle
+run 15000
+WARNING: It is heavily recommended to use 'neigh_modify delay 0' with granular pair styles (../pair_gran.cpp:237)
+Setting up run at Sat Apr 13 23:51:39 2019
+
+Memory usage per processor = 10.8449 Mbytes
+    Step    Atoms         KinEng            CPU 
+       1     1500  2.5509484e-06              0 
+INFO: Particle insertion ins: inserted 1500 particle templates (mass 2.120575e+01) at step 1001
+ - a total of 3000 particle templates (mass 4.241150e+01) inserted so far.
+INFO: Particle insertion ins: inserted 1500 particle templates (mass 2.120575e+01) at step 2001
+ - a total of 4500 particle templates (mass 6.361725e+01) inserted so far.
+INFO: Particle insertion ins: inserted 1500 particle templates (mass 2.120575e+01) at step 3001
+ - a total of 6000 particle templates (mass 8.482300e+01) inserted so far.
+INFO: Particle insertion ins: inserted 1500 particle templates (mass 2.120575e+01) at step 4001
+ - a total of 7500 particle templates (mass 1.060288e+02) inserted so far.
+INFO: Particle insertion ins: inserted 1500 particle templates (mass 2.120575e+01) at step 5001
+ - a total of 9000 particle templates (mass 1.272345e+02) inserted so far.
+INFO: Particle insertion ins: inserted 1500 particle templates (mass 2.120575e+01) at step 6001
+ - a total of 10500 particle templates (mass 1.484403e+02) inserted so far.
+INFO: Particle insertion ins: inserted 1500 particle templates (mass 2.120575e+01) at step 7001
+ - a total of 12000 particle templates (mass 1.696460e+02) inserted so far.
+INFO: Particle insertion ins: inserted 1500 particle templates (mass 2.120575e+01) at step 8001
+ - a total of 13500 particle templates (mass 1.908518e+02) inserted so far.
+INFO: Particle insertion ins: inserted 1500 particle templates (mass 2.120575e+01) at step 9001
+ - a total of 15000 particle templates (mass 2.120575e+02) inserted so far.
+   15001    15000    0.016397809      70.929352 
+Loop time of 70.9295 on 4 procs for 15000 steps with 15000 atoms, finish time Sat Apr 13 23:52:50 2019
+
+
+Pair  time (%) = 25.452 (35.8835)
+Neigh time (%) = 5.36621 (7.56556)
+Comm  time (%) = 35.6816 (50.3058)
+Outpt time (%) = 0.254172 (0.358345)
+Other time (%) = 4.17546 (5.88678)
+
+Nlocal:    3750 ave 7530 max 0 min
+Histogram: 2 0 0 0 0 0 0 0 0 2
+Nghost:    451.5 ave 904 max 0 min
+Histogram: 2 0 0 0 0 0 0 0 0 2
+Neighs:    72070 ave 144684 max 0 min
+Histogram: 2 0 0 0 0 0 0 0 0 2
+
+Total # of neighbors = 288280
+Ave neighs/atom = 19.2187
+Neighbor list builds = 1500
+Dangerous builds = 0
+
+
+# Move scoop into regolith surface
+fix moveCad all move/mesh mesh cad1 linear 0 0 -0.6
+
+run 10000
+WARNING: It is heavily recommended to use 'neigh_modify delay 0' with granular pair styles (../pair_gran.cpp:237)
+Setting up run at Sat Apr 13 23:52:50 2019
+
+Memory usage per processor = 16.1862 Mbytes
+    Step    Atoms         KinEng            CPU 
+   15001    15000    0.016397809              0 
+   25001    15000  5.1427572e-07      90.349015 
+Loop time of 90.3491 on 4 procs for 10000 steps with 15000 atoms, finish time Sat Apr 13 23:54:21 2019
+
+
+Pair  time (%) = 33.8655 (37.483)
+Neigh time (%) = 6.09221 (6.74296)
+Comm  time (%) = 1.41995 (1.57162)
+Outpt time (%) = 0.179356 (0.198514)
+Other time (%) = 48.7921 (54.0039)
+
+Nlocal:    3750 ave 7530 max 0 min
+Histogram: 2 0 0 0 0 0 0 0 0 2
+Nghost:    451.75 ave 904 max 0 min
+Histogram: 2 0 0 0 0 0 0 0 0 2
+Neighs:    72162.8 ave 144874 max 0 min
+Histogram: 2 0 0 0 0 0 0 0 0 2
+
+Total # of neighbors = 288651
+Ave neighs/atom = 19.2434
+Neighbor list builds = 1000
+Dangerous builds = 0
+
+# Move scoop into regolith surface
+fix moveCad all move/mesh mesh cad1 linear 0 0 -0.2
+
+run 5000
+WARNING: It is heavily recommended to use 'neigh_modify delay 0' with granular pair styles (../pair_gran.cpp:237)
+Setting up run at Sat Apr 13 23:54:21 2019
+
+Memory usage per processor = 16.1862 Mbytes
+    Step    Atoms         KinEng            CPU 
+   25001    15000  5.1427572e-07              0 
+   30001    15000    0.056018735      45.649541 
+Loop time of 45.6496 on 4 procs for 5000 steps with 15000 atoms, finish time Sat Apr 13 23:55:06 2019
+
+
+Pair  time (%) = 17.0364 (37.32)
+Neigh time (%) = 3.04651 (6.67367)
+Comm  time (%) = 0.716719 (1.57004)
+Outpt time (%) = 0.117961 (0.258404)
+Other time (%) = 24.732 (54.1779)
+
+Nlocal:    3750 ave 7530 max 0 min
+Histogram: 2 0 0 0 0 0 0 0 0 2
+Nghost:    446.25 ave 900 max 0 min
+Histogram: 2 0 0 0 0 0 0 0 0 2
+Neighs:    72026.8 ave 144763 max 0 min
+Histogram: 2 0 0 0 0 0 0 0 0 2
+
+Total # of neighbors = 288107
+Ave neighs/atom = 19.2071
+Neighbor list builds = 500
+Dangerous builds = 0
+
+# Stop CAD motion
+unfix moveCad
+
+# Move scoop across regolith surface
+fix moveCad2 all move/mesh mesh cad1 linear 0 0.1 0
+
+run 10000
+WARNING: It is heavily recommended to use 'neigh_modify delay 0' with granular pair styles (../pair_gran.cpp:237)
+Setting up run at Sat Apr 13 23:55:06 2019
+
+Memory usage per processor = 16.1862 Mbytes
+    Step    Atoms         KinEng            CPU 
+   30001    15000    0.056018735              0 
+   40001    15000   0.0057049589      91.313218 
+Loop time of 91.3133 on 4 procs for 10000 steps with 15000 atoms, finish time Sat Apr 13 23:56:38 2019
+
+
+Pair  time (%) = 33.9099 (37.1357)
+Neigh time (%) = 6.07822 (6.65645)
+Comm  time (%) = 1.40888 (1.54291)
+Outpt time (%) = 0.176676 (0.193483)
+Other time (%) = 49.7397 (54.4714)
+
+Nlocal:    3750 ave 7532 max 0 min
+Histogram: 2 0 0 0 0 0 0 0 0 2
+Nghost:    444.75 ave 891 max 0 min
+Histogram: 2 0 0 0 0 0 0 0 0 2
+Neighs:    72076.2 ave 144581 max 0 min
+Histogram: 2 0 0 0 0 0 0 0 0 2
+
+Total # of neighbors = 288305
+Ave neighs/atom = 19.2203
+Neighbor list builds = 1000
+Dangerous builds = 0

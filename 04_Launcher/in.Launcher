@@ -1,0 +1,165 @@
+### Launcher Simulation
+### This simulation involves inserting a set of particles into a bucket,
+### allowing them to settle under the force of gravity, and then accelerating
+
+
+### Variables
+variable vmax equal 0.25
+variable accel equal 0.75
+
+
+variable nP equal 10000
+variable tStep equal 1.0e-4
+variable prate equal 200
+variable tSettle equal ${nP}/${prate}/${tStep}+1/${tStep}
+
+variable minRad equal 0.005
+variable ndist equal 2*${minRad}
+
+variable fdump equal 1000
+
+### Initialization
+
+units si
+atom_style sphere
+atom_modify map array
+boundary f f f
+newton off
+communicate single vel yes
+
+# Declare domain
+region domain block -0.6 0.6 -0.6 0.6 0 4.0 units box
+create_box 2 domain
+
+# Neighbor listing
+neighbor ${ndist} bin
+neigh_modify every 1 check no delay 0
+
+### Setup -------------------------------------------------------------------------------------------
+
+# Material and interaction properties required
+fix m1 all property/global youngsModulus peratomtype 1.0e7 1.0e7
+fix m2 all property/global poissonsRatio peratomtype 0.25 0.25
+fix m3 all property/global coefficientRestitution peratomtypepair 2 0.65 0.65 0.65 0.65
+fix m4 all property/global coefficientFriction peratomtypepair 2 1 1 1 1
+fix m5 all property/global cohesionEnergyDensity peratomtypepair 2 200 20 20 200
+fix m6 all property/global coefficientRollingFriction peratomtypepair 2 0.04 0.04 0.04 0.04
+
+# Particle insertion
+
+fix pts1 all particletemplate/sphere 49979693 atom_type 1 density constant 3110 radius constant ${minRad}
+fix pts2 all particletemplate/sphere 15485863 atom_type 1 density constant 3110 radius constant 0.01
+fix pts3 all particletemplate/sphere 15485867 atom_type 1 density constant 3110 radius constant 0.03
+fix pts4 all particletemplate/sphere 67867967 atom_type 1 density constant 3110 radius constant 0.05
+
+
+fix pdd all particledistribution/discrete 32452843 4 pts1 0.60 pts2 0.25 pts3 0.1 pts4 0.05
+
+
+region reservoir block -0.1 0.1 -0.1 0.1 0.5 0.6 units box
+
+fix ins all insert/rate/region seed 49979687 distributiontemplate pdd &
+nparticles ${nP} particlerate 50 insert_every 1000 &
+overlapcheck yes vel constant 0. 0. 0. region reservoir ntry_mc 10000
+
+
+# Define the physics
+pair_style gran model hertz tangential history cohesion sjkr rolling_friction cdt
+pair_coeff * *
+
+
+### Import CAD / Generate Solids --------------------------------------------------------------------
+
+fix cad1 all mesh/surface/stress file PL_Launch_Bucket_simple.STL type 2 rotate axis 1 0 0 angle 90 &
+move -0.15 0.222 0 stress on
+
+
+# Use the imported mesh as granular wall
+fix geometry all wall/gran model hertz tangential history mesh n_meshes 1 meshes cad1
+
+variable time equal step*dt
+variable fx equal f_cad1[1]
+variable fy equal f_cad1[2]
+variable fz equal f_cad1[3]
+variable Mx equal f_cad1[4]
+variable My equal f_cad1[5]
+variable Mz equal f_cad1[6]
+
+
+# Bounding walls of domain
+fix zwalls1 all wall/gran model hertz tangential history primitive type 1 zplane 0.0
+fix xwalls1 all wall/gran model hertz tangential history primitive type 1 xplane -0.6
+fix xwalls2 all wall/gran model hertz tangential history primitive type 1 xplane 0.6
+fix ywalls1 all wall/gran model hertz tangential history primitive type 1 yplane -0.6
+fix ywalls2 all wall/gran model hertz tangential history primitive type 1 yplane 0.6
+
+
+### Detailed Settings -------------------------------------------------------------------------------
+
+# Integrator
+fix integrator all nve/sphere
+
+# Gravity
+fix grav all gravity 9.81 vector 0.0 0.0 -1.0
+
+# Time step
+timestep ${tStep}
+
+### Thermodynamic output settings
+# none
+
+# Check time step and initialize dump file
+fix ctg all check/timestep/gran 1 0.01 0.01
+run 1
+unfix ctg
+
+# Dump Files for Post-Processing --------------------------------------------------------------------
+
+dump dumpstl all stl ${fdump} post/cad_*.stl
+dump dmp all custom/vtk ${fdump} post/launch_*.vtk id type type x y z ix iy iz vx vy vz fx fy fz omegax omegay omegaz radius 
+dump forces1 all mesh/vtk ${fdump} post/stress_*.vtk output interpolate stress stresscomponents cad1
+
+fix forceslog all print 200 "${time},${fx},${fy},${fz},${Mx},${My},${Mz}" file post/forces.csv &
+title "t,Fx,Fy,Fz,Mx,My,Mz" screen no
+
+
+# Run simulation for N time steps ------------------------------------------------------------------
+
+# Allow Particles to settle
+run ${tSettle}
+
+# Gravity
+fix grav all gravity 0.00000981 vector 0.0 0.0 -1.0
+run 10000
+
+variable vx equal 0.0
+variable vy equal 0.0
+variable vz equal 0.0
+
+# Accelerate Bucket Upward
+
+variable nLoop equal 25
+variable dvtimeStep equal (${vmax}-0)/${accel}/${tStep}/${nLoop}
+
+
+fix movecad all move/mesh mesh cad1 linear/variable v_vx v_vy v_vz
+
+label loop
+variable a loop ${nLoop}
+variable vz equal ${vmax}/${nLoop}*${a}
+print "A = ${vz}"
+run ${dvtimeStep}
+next a
+jump in.Launcher loop
+variable vz equal ${vmax}
+
+label loop2
+variable b loop ${nLoop}
+variable vz equal ${vmax}-(${vmax}/${nLoop}*v_b)
+print "A = ${vz}"
+run ${dvtimeStep}
+next b
+jump in.Launcher loop2
+variable vz equal 0.0
+
+run 100000

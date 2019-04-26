@@ -1,0 +1,2368 @@
+LIGGGHTS (Version LIGGGHTS-PUBLIC 3.8.0, compiled 2018-12-24-10:52:11 by karl, git commit 28301df8853491784b1d8b90533ea89b8c6af1e8)
+### Launcher Simulation
+### This simulation involves inserting a set of particles into a bucket,
+### allowing them to settle under the force of gravity, and then accelerating
+
+
+### Variables
+variable nP equal 500
+variable tStep equal 0.0001
+variable tSettle equal 300000
+variable vmax equal 0.2
+variable accel equal 0.05
+### Initialization
+
+units si
+atom_style sphere
+atom_modify map array
+boundary f f f
+newton off
+communicate single vel yes
+
+# Declare domain
+region domain block -0.6 0.6 -0.6 0.6 0 4.0 units box
+create_box 2 domain
+Created orthogonal box = (-0.6 -0.6 0) to (0.6 0.6 4)
+  1 by 1 by 4 MPI processor grid
+
+# Neighbor listing
+neighbor 0.01 bin
+neigh_modify every 1 check no delay 0
+
+### Setup -------------------------------------------------------------------------------------------
+
+# Material and interaction properties required
+fix m1 all property/global youngsModulus peratomtype 1.0e7 1.0e7
+fix m2 all property/global poissonsRatio peratomtype 0.25 0.25
+fix m3 all property/global coefficientRestitution peratomtypepair 2 0.65 0.65 0.65 0.65
+fix m4 all property/global coefficientFriction peratomtypepair 2 1 1 1 1
+fix m5 all property/global cohesionEnergyDensity peratomtypepair 2 50 0 0 50
+fix m6 all property/global coefficientRollingFriction peratomtypepair 2 0.04 0.04 0.04 0.04
+
+# Particle insertion
+
+fix pts1 all particletemplate/sphere 49979693 atom_type 1 density constant 3110 radius constant 0.005
+fix pts2 all particletemplate/sphere 15485863 atom_type 1 density constant 3110 radius constant 0.01
+fix pts3 all particletemplate/sphere 15485867 atom_type 1 density constant 3110 radius constant 0.03
+fix pts4 all particletemplate/sphere 67867967 atom_type 1 density constant 3110 radius constant 0.05
+
+
+fix pdd all particledistribution/discrete 32452843 4 pts1 0.60 pts2 0.25 pts3 0.1 pts4 0.05
+
+
+region reservoir block -0.1 0.1 -0.1 0.1 0.5 0.6 units box
+
+fix ins all insert/rate/region seed 49979687 distributiontemplate pdd nparticles ${nP} particlerate 50 insert_every 1000 overlapcheck yes vel constant 0. 0. 0. region reservoir ntry_mc 10000
+fix ins all insert/rate/region seed 49979687 distributiontemplate pdd nparticles 500 particlerate 50 insert_every 1000 overlapcheck yes vel constant 0. 0. 0. region reservoir ntry_mc 10000
+
+
+# Define the physics
+pair_style gran model hertz tangential history cohesion sjkr rolling_friction cdt
+WARNING: 
+	The contact model you specified is not located in any whitelist.
+	Because of this the model will be run in an unoptimized version (increasing runtime by up to 20%).
+	In order to optimize this model you have the following options:
+		(i)  Run the genAutoExamplesWhitelist.sh script in your LIGGGHTS(R) source folder to automatically parse the input script
+		(ii) Add the model combination by hand to your style_contact_model_user.whitelist that can be found in your LIGGGHTS(R) source folder
+	If you perform one of the steps above LIGGGHTS(R) needs to be recompiled to generate the optimized code.
+
+ (../contact_models.h:364)
+pair_coeff * *
+
+
+### Import CAD / Generate Solids --------------------------------------------------------------------
+
+fix cad1 all mesh/surface/stress file PL_Launch_Bucket_simple.STL type 2 rotate axis 1 0 0 angle 90 move -0.15 0.222 0 stress on
+
+
+# Use the imported mesh as granular wall
+fix geometry all wall/gran model hertz tangential history mesh n_meshes 1 meshes cad1
+
+variable time equal step*dt
+variable fx equal f_cad1[1]
+variable fy equal f_cad1[2]
+variable fz equal f_cad1[3]
+variable Mx equal f_cad1[4]
+variable My equal f_cad1[5]
+variable Mz equal f_cad1[6]
+
+
+# Bounding walls of domain
+fix zwalls1 all wall/gran model hertz tangential history primitive type 1 zplane 0.0
+fix xwalls1 all wall/gran model hertz tangential history primitive type 1 xplane -0.6
+fix xwalls2 all wall/gran model hertz tangential history primitive type 1 xplane 0.6
+fix ywalls1 all wall/gran model hertz tangential history primitive type 1 yplane -0.6
+fix ywalls2 all wall/gran model hertz tangential history primitive type 1 yplane 0.6
+
+
+### Detailed Settings -------------------------------------------------------------------------------
+
+# Integrator
+fix integrator all nve/sphere
+
+# Gravity
+fix grav all gravity 9.81 vector 0.0 0.0 -1.0
+
+# Time step
+timestep ${tStep}
+timestep 0.0001
+
+### Thermodynamic output settings
+# none
+
+# Check time step and initialize dump file
+fix ctg all check/timestep/gran 1 0.01 0.01
+run 1
+Setting up run at Mon Apr 22 01:30:14 2019
+
+INFO: Particle insertion ins: 5.000000 particles every 1000 steps - particle rate 50.000000, (mass rate 1.288768e-01)
+      500 particles (mass 1.288768e+00) within 100000 steps
+Memory usage per processor = 6.77403 Mbytes
+    Step    Atoms         KinEng            CPU 
+       0        0              0              0 
+INFO: Particle insertion ins: inserted 5 particle templates (mass 1.954071e-02) at step 1
+ - a total of 5 particle templates (mass 1.954071e-02) inserted so far.
+WARNING: time-step is 20.944829 % of rayleigh time (../fix_check_timestep_gran.cpp:200)
+WARNING: time-step is 1.683200 % of hertz time (../fix_check_timestep_gran.cpp:208)
+       1        5  2.3506517e-09    0.001044792 
+Loop time of 0.00106342 on 4 procs for 1 steps with 5 atoms, finish time Mon Apr 22 01:30:14 2019
+
+
+Pair  time (%) = 6.37925e-06 (0.599882)
+Neigh time (%) = 3.03555e-05 (2.85452)
+Comm  time (%) = 3.72785e-05 (3.50554)
+Outpt time (%) = 6.27335e-05 (5.89923)
+Other time (%) = 0.000926671 (87.1408)
+
+Nlocal:    1.25 ave 5 max 0 min
+Histogram: 3 0 0 0 0 0 0 0 0 1
+Nghost:    0 ave 0 max 0 min
+Histogram: 4 0 0 0 0 0 0 0 0 0
+Neighs:    0 ave 0 max 0 min
+Histogram: 4 0 0 0 0 0 0 0 0 0
+
+Total # of neighbors = 0
+Ave neighs/atom = 0
+Neighbor list builds = 1
+Dangerous builds = 0
+unfix ctg
+
+# Dump Files for Post-Processing --------------------------------------------------------------------
+
+dump dumpstl all stl 2000 post/cad_*.stl
+dump dmp all custom/vtk 2000 post/launch_*.vtk id type type x y z ix iy iz vx vy vz fx fy fz omegax omegay omegaz radius
+dump forces1 all mesh/vtk 2000 post/stress_*.vtk output interpolate stress stresscomponents cad1
+
+fix forceslog all print 200 "${time},${fx},${fy},${fz},${Mx},${My},${Mz}" file post/forces.csv title "t,Fx,Fy,Fz,Mx,My,Mz" screen no
+
+
+# Run simulation for N time steps ------------------------------------------------------------------
+
+# Allow Particles to settle
+run ${tSettle}
+run 300000
+Setting up run at Mon Apr 22 01:30:14 2019
+
+Memory usage per processor = 10.7833 Mbytes
+    Step    Atoms         KinEng            CPU 
+       1        5  2.3506517e-09              0 
+INFO: Particle insertion ins: inserted 5 particle templates (mass 8.141961e-03) at step 1001
+ - a total of 10 particle templates (mass 2.768267e-02) inserted so far.
+INFO: Particle insertion ins: inserted 5 particle templates (mass 1.954071e-02) at step 2001
+ - a total of 15 particle templates (mass 4.722337e-02) inserted so far.
+INFO: Particle insertion ins: inserted 5 particle templates (mass 8.141961e-03) at step 3001
+ - a total of 20 particle templates (mass 5.536533e-02) inserted so far.
+INFO: Particle insertion ins: inserted 5 particle templates (mass 8.141961e-03) at step 4001
+ - a total of 25 particle templates (mass 6.350730e-02) inserted so far.
+INFO: Particle insertion ins: inserted 5 particle templates (mass 8.141961e-03) at step 5001
+ - a total of 30 particle templates (mass 7.164926e-02) inserted so far.
+INFO: Particle insertion ins: inserted 5 particle templates (mass 8.141961e-03) at step 6001
+ - a total of 35 particle templates (mass 7.979122e-02) inserted so far.
+INFO: Particle insertion ins: inserted 5 particle templates (mass 8.141961e-03) at step 7001
+ - a total of 40 particle templates (mass 8.793318e-02) inserted so far.
+INFO: Particle insertion ins: inserted 5 particle templates (mass 8.141961e-03) at step 8001
+ - a total of 45 particle templates (mass 9.607514e-02) inserted so far.
+INFO: Particle insertion ins: inserted 5 particle templates (mass 1.954071e-02) at step 9001
+ - a total of 50 particle templates (mass 1.156158e-01) inserted so far.
+INFO: Particle insertion ins: inserted 5 particle templates (mass 8.141961e-03) at step 10001
+ - a total of 55 particle templates (mass 1.237578e-01) inserted so far.
+INFO: Particle insertion ins: inserted 5 particle templates (mass 1.954071e-02) at step 11001
+ - a total of 60 particle templates (mass 1.432985e-01) inserted so far.
+INFO: Particle insertion ins: inserted 5 particle templates (mass 1.954071e-02) at step 12001
+ - a total of 65 particle templates (mass 1.628392e-01) inserted so far.
+INFO: Particle insertion ins: inserted 5 particle templates (mass 8.141961e-03) at step 13001
+ - a total of 70 particle templates (mass 1.709812e-01) inserted so far.
+INFO: Particle insertion ins: inserted 5 particle templates (mass 8.141961e-03) at step 14001
+ - a total of 75 particle templates (mass 1.791231e-01) inserted so far.
+INFO: Particle insertion ins: inserted 5 particle templates (mass 8.141961e-03) at step 15001
+ - a total of 80 particle templates (mass 1.872651e-01) inserted so far.
+INFO: Particle insertion ins: inserted 5 particle templates (mass 8.141961e-03) at step 16001
+ - a total of 85 particle templates (mass 1.954071e-01) inserted so far.
+INFO: Particle insertion ins: inserted 5 particle templates (mass 8.141961e-03) at step 17001
+ - a total of 90 particle templates (mass 2.035490e-01) inserted so far.
+INFO: Particle insertion ins: inserted 5 particle templates (mass 1.954071e-02) at step 18001
+ - a total of 95 particle templates (mass 2.230897e-01) inserted so far.
+INFO: Particle insertion ins: inserted 5 particle templates (mass 8.141961e-03) at step 19001
+ - a total of 100 particle templates (mass 2.312317e-01) inserted so far.
+INFO: Particle insertion ins: inserted 5 particle templates (mass 1.954071e-02) at step 20001
+ - a total of 105 particle templates (mass 2.507724e-01) inserted so far.
+INFO: Particle insertion ins: inserted 5 particle templates (mass 8.141961e-03) at step 21001
+ - a total of 110 particle templates (mass 2.589144e-01) inserted so far.
+INFO: Particle insertion ins: inserted 5 particle templates (mass 8.141961e-03) at step 22001
+ - a total of 115 particle templates (mass 2.670563e-01) inserted so far.
+INFO: Particle insertion ins: inserted 5 particle templates (mass 8.141961e-03) at step 23001
+ - a total of 120 particle templates (mass 2.751983e-01) inserted so far.
+INFO: Particle insertion ins: inserted 5 particle templates (mass 8.141961e-03) at step 24001
+ - a total of 125 particle templates (mass 2.833402e-01) inserted so far.
+INFO: Particle insertion ins: inserted 5 particle templates (mass 1.954071e-02) at step 25001
+ - a total of 130 particle templates (mass 3.028809e-01) inserted so far.
+INFO: Particle insertion ins: inserted 5 particle templates (mass 8.141961e-03) at step 26001
+ - a total of 135 particle templates (mass 3.110229e-01) inserted so far.
+INFO: Particle insertion ins: inserted 5 particle templates (mass 8.141961e-03) at step 27001
+ - a total of 140 particle templates (mass 3.191649e-01) inserted so far.
+INFO: Particle insertion ins: inserted 5 particle templates (mass 1.954071e-02) at step 28001
+ - a total of 145 particle templates (mass 3.387056e-01) inserted so far.
+INFO: Particle insertion ins: inserted 5 particle templates (mass 8.141961e-03) at step 29001
+ - a total of 150 particle templates (mass 3.468475e-01) inserted so far.
+INFO: Particle insertion ins: inserted 5 particle templates (mass 1.954071e-02) at step 30001
+ - a total of 155 particle templates (mass 3.663882e-01) inserted so far.
+INFO: Particle insertion ins: inserted 5 particle templates (mass 8.141961e-03) at step 31001
+ - a total of 160 particle templates (mass 3.745302e-01) inserted so far.
+INFO: Particle insertion ins: inserted 5 particle templates (mass 1.954071e-02) at step 32001
+ - a total of 165 particle templates (mass 3.940709e-01) inserted so far.
+INFO: Particle insertion ins: inserted 5 particle templates (mass 8.141961e-03) at step 33001
+ - a total of 170 particle templates (mass 4.022129e-01) inserted so far.
+INFO: Particle insertion ins: inserted 5 particle templates (mass 1.954071e-02) at step 34001
+ - a total of 175 particle templates (mass 4.217536e-01) inserted so far.
+INFO: Particle insertion ins: inserted 5 particle templates (mass 1.954071e-02) at step 35001
+ - a total of 180 particle templates (mass 4.412943e-01) inserted so far.
+INFO: Particle insertion ins: inserted 5 particle templates (mass 8.141961e-03) at step 36001
+ - a total of 185 particle templates (mass 4.494362e-01) inserted so far.
+INFO: Particle insertion ins: inserted 5 particle templates (mass 8.141961e-03) at step 37001
+ - a total of 190 particle templates (mass 4.575782e-01) inserted so far.
+INFO: Particle insertion ins: inserted 5 particle templates (mass 8.141961e-03) at step 38001
+ - a total of 195 particle templates (mass 4.657202e-01) inserted so far.
+INFO: Particle insertion ins: inserted 5 particle templates (mass 8.141961e-03) at step 39001
+ - a total of 200 particle templates (mass 4.738621e-01) inserted so far.
+INFO: Particle insertion ins: inserted 5 particle templates (mass 8.141961e-03) at step 40001
+ - a total of 205 particle templates (mass 4.820041e-01) inserted so far.
+INFO: Particle insertion ins: inserted 5 particle templates (mass 8.141961e-03) at step 41001
+ - a total of 210 particle templates (mass 4.901460e-01) inserted so far.
+INFO: Particle insertion ins: inserted 5 particle templates (mass 8.141961e-03) at step 42001
+ - a total of 215 particle templates (mass 4.982880e-01) inserted so far.
+INFO: Particle insertion ins: inserted 5 particle templates (mass 8.141961e-03) at step 43001
+ - a total of 220 particle templates (mass 5.064300e-01) inserted so far.
+INFO: Particle insertion ins: inserted 5 particle templates (mass 8.141961e-03) at step 44001
+ - a total of 225 particle templates (mass 5.145719e-01) inserted so far.
+INFO: Particle insertion ins: inserted 5 particle templates (mass 8.141961e-03) at step 45001
+ - a total of 230 particle templates (mass 5.227139e-01) inserted so far.
+INFO: Particle insertion ins: inserted 5 particle templates (mass 8.141961e-03) at step 46001
+ - a total of 235 particle templates (mass 5.308559e-01) inserted so far.
+INFO: Particle insertion ins: inserted 5 particle templates (mass 8.141961e-03) at step 47001
+ - a total of 240 particle templates (mass 5.389978e-01) inserted so far.
+INFO: Particle insertion ins: inserted 5 particle templates (mass 8.141961e-03) at step 48001
+ - a total of 245 particle templates (mass 5.471398e-01) inserted so far.
+INFO: Particle insertion ins: inserted 5 particle templates (mass 1.954071e-02) at step 49001
+ - a total of 250 particle templates (mass 5.666805e-01) inserted so far.
+INFO: Particle insertion ins: inserted 5 particle templates (mass 8.141961e-03) at step 50001
+ - a total of 255 particle templates (mass 5.748224e-01) inserted so far.
+INFO: Particle insertion ins: inserted 5 particle templates (mass 1.954071e-02) at step 51001
+ - a total of 260 particle templates (mass 5.943632e-01) inserted so far.
+INFO: Particle insertion ins: inserted 5 particle templates (mass 8.141961e-03) at step 52001
+ - a total of 265 particle templates (mass 6.025051e-01) inserted so far.
+INFO: Particle insertion ins: inserted 5 particle templates (mass 8.141961e-03) at step 53001
+ - a total of 270 particle templates (mass 6.106471e-01) inserted so far.
+INFO: Particle insertion ins: inserted 5 particle templates (mass 1.954071e-02) at step 54001
+ - a total of 275 particle templates (mass 6.301878e-01) inserted so far.
+INFO: Particle insertion ins: inserted 5 particle templates (mass 8.141961e-03) at step 55001
+ - a total of 280 particle templates (mass 6.383297e-01) inserted so far.
+INFO: Particle insertion ins: inserted 5 particle templates (mass 8.141961e-03) at step 56001
+ - a total of 285 particle templates (mass 6.464717e-01) inserted so far.
+INFO: Particle insertion ins: inserted 5 particle templates (mass 8.141961e-03) at step 57001
+ - a total of 290 particle templates (mass 6.546137e-01) inserted so far.
+INFO: Particle insertion ins: inserted 5 particle templates (mass 1.954071e-02) at step 58001
+ - a total of 295 particle templates (mass 6.741544e-01) inserted so far.
+INFO: Particle insertion ins: inserted 5 particle templates (mass 8.141961e-03) at step 59001
+ - a total of 300 particle templates (mass 6.822963e-01) inserted so far.
+INFO: Particle insertion ins: inserted 5 particle templates (mass 1.954071e-02) at step 60001
+ - a total of 305 particle templates (mass 7.018370e-01) inserted so far.
+INFO: Particle insertion ins: inserted 5 particle templates (mass 8.141961e-03) at step 61001
+ - a total of 310 particle templates (mass 7.099790e-01) inserted so far.
+INFO: Particle insertion ins: inserted 5 particle templates (mass 8.141961e-03) at step 62001
+ - a total of 315 particle templates (mass 7.181210e-01) inserted so far.
+INFO: Particle insertion ins: inserted 5 particle templates (mass 1.954071e-02) at step 63001
+ - a total of 320 particle templates (mass 7.376617e-01) inserted so far.
+INFO: Particle insertion ins: inserted 5 particle templates (mass 8.141961e-03) at step 64001
+ - a total of 325 particle templates (mass 7.458036e-01) inserted so far.
+INFO: Particle insertion ins: inserted 5 particle templates (mass 1.954071e-02) at step 65001
+ - a total of 330 particle templates (mass 7.653443e-01) inserted so far.
+INFO: Particle insertion ins: inserted 5 particle templates (mass 1.954071e-02) at step 66001
+ - a total of 335 particle templates (mass 7.848850e-01) inserted so far.
+INFO: Particle insertion ins: inserted 5 particle templates (mass 8.141961e-03) at step 67001
+ - a total of 340 particle templates (mass 7.930270e-01) inserted so far.
+INFO: Particle insertion ins: inserted 5 particle templates (mass 8.141961e-03) at step 68001
+ - a total of 345 particle templates (mass 8.011690e-01) inserted so far.
+INFO: Particle insertion ins: inserted 5 particle templates (mass 8.141961e-03) at step 69001
+ - a total of 350 particle templates (mass 8.093109e-01) inserted so far.
+INFO: Particle insertion ins: inserted 5 particle templates (mass 8.141961e-03) at step 70001
+ - a total of 355 particle templates (mass 8.174529e-01) inserted so far.
+INFO: Particle insertion ins: inserted 5 particle templates (mass 1.954071e-02) at step 71001
+ - a total of 360 particle templates (mass 8.369936e-01) inserted so far.
+INFO: Particle insertion ins: inserted 5 particle templates (mass 8.141961e-03) at step 72001
+ - a total of 365 particle templates (mass 8.451355e-01) inserted so far.
+INFO: Particle insertion ins: inserted 5 particle templates (mass 1.954071e-02) at step 73001
+ - a total of 370 particle templates (mass 8.646763e-01) inserted so far.
+INFO: Particle insertion ins: inserted 5 particle templates (mass 3.582463e-01) at step 74001
+ - a total of 375 particle templates (mass 1.222923e+00) inserted so far.
+INFO: Particle insertion ins: inserted 5 particle templates (mass 8.141961e-03) at step 75001
+ - a total of 380 particle templates (mass 1.231064e+00) inserted so far.
+INFO: Particle insertion ins: inserted 5 particle templates (mass 8.141961e-03) at step 76001
+ - a total of 385 particle templates (mass 1.239206e+00) inserted so far.
+INFO: Particle insertion ins: inserted 5 particle templates (mass 8.141961e-03) at step 77001
+ - a total of 390 particle templates (mass 1.247348e+00) inserted so far.
+INFO: Particle insertion ins: inserted 5 particle templates (mass 1.954071e-02) at step 78001
+ - a total of 395 particle templates (mass 1.266889e+00) inserted so far.
+INFO: Particle insertion ins: inserted 5 particle templates (mass 8.141961e-03) at step 79001
+ - a total of 400 particle templates (mass 1.275031e+00) inserted so far.
+INFO: Particle insertion ins: inserted 5 particle templates (mass 1.954071e-02) at step 80001
+ - a total of 405 particle templates (mass 1.294572e+00) inserted so far.
+INFO: Particle insertion ins: inserted 5 particle templates (mass 1.954071e-02) at step 81001
+ - a total of 410 particle templates (mass 1.314112e+00) inserted so far.
+INFO: Particle insertion ins: inserted 5 particle templates (mass 8.141961e-03) at step 82001
+ - a total of 415 particle templates (mass 1.322254e+00) inserted so far.
+INFO: Particle insertion ins: inserted 5 particle templates (mass 1.954071e-02) at step 83001
+ - a total of 420 particle templates (mass 1.341795e+00) inserted so far.
+INFO: Particle insertion ins: inserted 5 particle templates (mass 1.954071e-02) at step 84001
+ - a total of 425 particle templates (mass 1.361336e+00) inserted so far.
+INFO: Particle insertion ins: inserted 5 particle templates (mass 8.141961e-03) at step 85001
+ - a total of 430 particle templates (mass 1.369478e+00) inserted so far.
+INFO: Particle insertion ins: inserted 5 particle templates (mass 8.141961e-03) at step 86001
+ - a total of 435 particle templates (mass 1.377620e+00) inserted so far.
+INFO: Particle insertion ins: inserted 5 particle templates (mass 8.141961e-03) at step 87001
+ - a total of 440 particle templates (mass 1.385762e+00) inserted so far.
+INFO: Particle insertion ins: inserted 5 particle templates (mass 8.141961e-03) at step 88001
+ - a total of 445 particle templates (mass 1.393904e+00) inserted so far.
+INFO: Particle insertion ins: inserted 5 particle templates (mass 8.141961e-03) at step 89001
+ - a total of 450 particle templates (mass 1.402046e+00) inserted so far.
+INFO: Particle insertion ins: inserted 5 particle templates (mass 1.954071e-02) at step 90001
+ - a total of 455 particle templates (mass 1.421586e+00) inserted so far.
+INFO: Particle insertion ins: inserted 5 particle templates (mass 8.141961e-03) at step 91001
+ - a total of 460 particle templates (mass 1.429728e+00) inserted so far.
+INFO: Particle insertion ins: inserted 5 particle templates (mass 8.141961e-03) at step 92001
+ - a total of 465 particle templates (mass 1.437870e+00) inserted so far.
+INFO: Particle insertion ins: inserted 5 particle templates (mass 1.954071e-02) at step 93001
+ - a total of 470 particle templates (mass 1.457411e+00) inserted so far.
+INFO: Particle insertion ins: inserted 5 particle templates (mass 8.141961e-03) at step 94001
+ - a total of 475 particle templates (mass 1.465553e+00) inserted so far.
+INFO: Particle insertion ins: inserted 5 particle templates (mass 1.954071e-02) at step 95001
+ - a total of 480 particle templates (mass 1.485094e+00) inserted so far.
+INFO: Particle insertion ins: inserted 5 particle templates (mass 8.141961e-03) at step 96001
+ - a total of 485 particle templates (mass 1.493236e+00) inserted so far.
+INFO: Particle insertion ins: inserted 5 particle templates (mass 8.141961e-03) at step 97001
+ - a total of 490 particle templates (mass 1.501378e+00) inserted so far.
+INFO: Particle insertion ins: inserted 5 particle templates (mass 8.141961e-03) at step 98001
+ - a total of 495 particle templates (mass 1.509520e+00) inserted so far.
+INFO: Particle insertion ins: inserted 5 particle templates (mass 8.141961e-03) at step 99001
+ - a total of 500 particle templates (mass 1.517662e+00) inserted so far.
+  300001      500  0.00040488349      314.37653 
+Loop time of 314.377 on 4 procs for 300000 steps with 500 atoms, finish time Mon Apr 22 01:35:28 2019
+
+
+Pair  time (%) = 3.32856 (1.05878)
+Neigh time (%) = 39.249 (12.4847)
+Comm  time (%) = 24.6946 (7.8551)
+Outpt time (%) = 0.382173 (0.121565)
+Other time (%) = 246.722 (78.4798)
+
+Nlocal:    125 ave 500 max 0 min
+Histogram: 3 0 0 0 0 0 0 0 0 1
+Nghost:    0 ave 0 max 0 min
+Histogram: 4 0 0 0 0 0 0 0 0 0
+Neighs:    324 ave 1296 max 0 min
+Histogram: 3 0 0 0 0 0 0 0 0 1
+
+Total # of neighbors = 1296
+Ave neighs/atom = 2.592
+Neighbor list builds = 300000
+Dangerous builds = 0
+
+# Gravity
+fix grav all gravity 0.00000981 vector 0.0 0.0 -1.0
+run 10000
+Setting up run at Mon Apr 22 01:35:28 2019
+
+Memory usage per processor = 11.0141 Mbytes
+    Step    Atoms         KinEng            CPU 
+  300001      500  0.00040488349              0 
+  310001      500  0.00062750063       9.632469 
+Loop time of 9.63257 on 4 procs for 10000 steps with 500 atoms, finish time Mon Apr 22 01:35:38 2019
+
+
+Pair  time (%) = 0.11884 (1.23373)
+Neigh time (%) = 1.53789 (15.9655)
+Comm  time (%) = 0.626784 (6.50693)
+Outpt time (%) = 0.0121209 (0.125832)
+Other time (%) = 7.33694 (76.168)
+
+Nlocal:    125 ave 500 max 0 min
+Histogram: 3 0 0 0 0 0 0 0 0 1
+Nghost:    0 ave 0 max 0 min
+Histogram: 4 0 0 0 0 0 0 0 0 0
+Neighs:    316.75 ave 1267 max 0 min
+Histogram: 3 0 0 0 0 0 0 0 0 1
+
+Total # of neighbors = 1267
+Ave neighs/atom = 2.534
+Neighbor list builds = 10000
+Dangerous builds = 0
+
+variable vx equal 0.0
+variable vy equal 0.0
+variable vz equal 0.0
+
+# Accelerate Bucket Upward
+
+variable nLoop equal 25
+variable dvtimeStep equal (${vmax}-0)/${accel}/${tStep}/${nLoop}
+variable dvtimeStep equal (0.2-0)/${accel}/${tStep}/${nLoop}
+variable dvtimeStep equal (0.2-0)/0.05/${tStep}/${nLoop}
+variable dvtimeStep equal (0.2-0)/0.05/0.0001/${nLoop}
+variable dvtimeStep equal (0.2-0)/0.05/0.0001/25
+
+
+fix movecad all move/mesh mesh cad1 linear/variable v_vx v_vy v_vz
+
+label loop
+variable a loop ${nLoop}
+variable a loop 25
+variable vz equal ${vmax}/${nLoop}*${a}
+variable vz equal 0.2/${nLoop}*${a}
+variable vz equal 0.2/25*${a}
+variable vz equal 0.2/25*1
+print "A = ${vz}"
+A = 0.008
+run ${dvtimeStep}
+run 1600
+Setting up run at Mon Apr 22 01:35:38 2019
+
+Memory usage per processor = 11.0141 Mbytes
+    Step    Atoms         KinEng            CPU 
+  310001      500  0.00062750063              0 
+  311601      500  0.00062707844      2.2719935 
+Loop time of 2.27201 on 4 procs for 1600 steps with 500 atoms, finish time Mon Apr 22 01:35:40 2019
+
+
+Pair  time (%) = 0.0201973 (0.888959)
+Neigh time (%) = 0.245972 (10.8262)
+Comm  time (%) = 0.100918 (4.4418)
+Outpt time (%) = 1.88615e-05 (0.000830167)
+Other time (%) = 1.90491 (83.8422)
+
+Nlocal:    125 ave 500 max 0 min
+Histogram: 3 0 0 0 0 0 0 0 0 1
+Nghost:    0 ave 0 max 0 min
+Histogram: 4 0 0 0 0 0 0 0 0 0
+Neighs:    315.5 ave 1262 max 0 min
+Histogram: 3 0 0 0 0 0 0 0 0 1
+
+Total # of neighbors = 1262
+Ave neighs/atom = 2.524
+Neighbor list builds = 1600
+Dangerous builds = 0
+next a
+jump in.Launcher loop
+variable a loop ${nLoop}
+variable a loop 25
+variable vz equal ${vmax}/${nLoop}*${a}
+variable vz equal 0.2/${nLoop}*${a}
+variable vz equal 0.2/25*${a}
+variable vz equal 0.2/25*2
+print "A = ${vz}"
+A = 0.016
+run ${dvtimeStep}
+run 1600
+Setting up run at Mon Apr 22 01:35:40 2019
+
+Memory usage per processor = 11.0141 Mbytes
+    Step    Atoms         KinEng            CPU 
+  311601      500  0.00062707844              0 
+  313201      500  0.00062715367       2.370444 
+Loop time of 2.37054 on 4 procs for 1600 steps with 500 atoms, finish time Mon Apr 22 01:35:43 2019
+
+
+Pair  time (%) = 0.0213194 (0.89935)
+Neigh time (%) = 0.251267 (10.5996)
+Comm  time (%) = 0.132739 (5.59954)
+Outpt time (%) = 0.00413641 (0.174493)
+Other time (%) = 1.96108 (82.727)
+
+Nlocal:    125 ave 500 max 0 min
+Histogram: 3 0 0 0 0 0 0 0 0 1
+Nghost:    0 ave 0 max 0 min
+Histogram: 4 0 0 0 0 0 0 0 0 0
+Neighs:    314 ave 1256 max 0 min
+Histogram: 3 0 0 0 0 0 0 0 0 1
+
+Total # of neighbors = 1256
+Ave neighs/atom = 2.512
+Neighbor list builds = 1600
+Dangerous builds = 0
+next a
+jump in.Launcher loop
+variable a loop ${nLoop}
+variable a loop 25
+variable vz equal ${vmax}/${nLoop}*${a}
+variable vz equal 0.2/${nLoop}*${a}
+variable vz equal 0.2/25*${a}
+variable vz equal 0.2/25*3
+print "A = ${vz}"
+A = 0.024
+run ${dvtimeStep}
+run 1600
+Setting up run at Mon Apr 22 01:35:43 2019
+
+Memory usage per processor = 11.0141 Mbytes
+    Step    Atoms         KinEng            CPU 
+  313201      500  0.00062715367              0 
+  314801      500  0.00062758905      2.1188874 
+Loop time of 2.11899 on 4 procs for 1600 steps with 500 atoms, finish time Mon Apr 22 01:35:45 2019
+
+
+Pair  time (%) = 0.0200777 (0.947513)
+Neigh time (%) = 0.24517 (11.5701)
+Comm  time (%) = 0.0920586 (4.34446)
+Outpt time (%) = 0.00288091 (0.135957)
+Other time (%) = 1.7588 (83.0019)
+
+Nlocal:    125 ave 500 max 0 min
+Histogram: 3 0 0 0 0 0 0 0 0 1
+Nghost:    0 ave 0 max 0 min
+Histogram: 4 0 0 0 0 0 0 0 0 0
+Neighs:    311.75 ave 1247 max 0 min
+Histogram: 3 0 0 0 0 0 0 0 0 1
+
+Total # of neighbors = 1247
+Ave neighs/atom = 2.494
+Neighbor list builds = 1600
+Dangerous builds = 0
+next a
+jump in.Launcher loop
+variable a loop ${nLoop}
+variable a loop 25
+variable vz equal ${vmax}/${nLoop}*${a}
+variable vz equal 0.2/${nLoop}*${a}
+variable vz equal 0.2/25*${a}
+variable vz equal 0.2/25*4
+print "A = ${vz}"
+A = 0.032
+run ${dvtimeStep}
+run 1600
+Setting up run at Mon Apr 22 01:35:45 2019
+
+Memory usage per processor = 11.0141 Mbytes
+    Step    Atoms         KinEng            CPU 
+  314801      500  0.00062758905              0 
+  316401      500   0.0013930702      2.1198295 
+Loop time of 2.11993 on 4 procs for 1600 steps with 500 atoms, finish time Mon Apr 22 01:35:47 2019
+
+
+Pair  time (%) = 0.0196043 (0.92476)
+Neigh time (%) = 0.243847 (11.5026)
+Comm  time (%) = 0.0827555 (3.90369)
+Outpt time (%) = 0.00240965 (0.113667)
+Other time (%) = 1.77131 (83.5553)
+
+Nlocal:    125 ave 500 max 0 min
+Histogram: 3 0 0 0 0 0 0 0 0 1
+Nghost:    0 ave 0 max 0 min
+Histogram: 4 0 0 0 0 0 0 0 0 0
+Neighs:    315.5 ave 1262 max 0 min
+Histogram: 3 0 0 0 0 0 0 0 0 1
+
+Total # of neighbors = 1262
+Ave neighs/atom = 2.524
+Neighbor list builds = 1600
+Dangerous builds = 0
+next a
+jump in.Launcher loop
+variable a loop ${nLoop}
+variable a loop 25
+variable vz equal ${vmax}/${nLoop}*${a}
+variable vz equal 0.2/${nLoop}*${a}
+variable vz equal 0.2/25*${a}
+variable vz equal 0.2/25*5
+print "A = ${vz}"
+A = 0.04
+run ${dvtimeStep}
+run 1600
+Setting up run at Mon Apr 22 01:35:47 2019
+
+Memory usage per processor = 11.0141 Mbytes
+    Step    Atoms         KinEng            CPU 
+  316401      500   0.0013930702              0 
+  318001      500   0.0014044197       2.108705 
+Loop time of 2.10873 on 4 procs for 1600 steps with 500 atoms, finish time Mon Apr 22 01:35:49 2019
+
+
+Pair  time (%) = 0.0197907 (0.938511)
+Neigh time (%) = 0.245005 (11.6186)
+Comm  time (%) = 0.0822588 (3.90087)
+Outpt time (%) = 0.00264658 (0.125506)
+Other time (%) = 1.75903 (83.4165)
+
+Nlocal:    125 ave 500 max 0 min
+Histogram: 3 0 0 0 0 0 0 0 0 1
+Nghost:    0 ave 0 max 0 min
+Histogram: 4 0 0 0 0 0 0 0 0 0
+Neighs:    325.75 ave 1303 max 0 min
+Histogram: 3 0 0 0 0 0 0 0 0 1
+
+Total # of neighbors = 1303
+Ave neighs/atom = 2.606
+Neighbor list builds = 1600
+Dangerous builds = 0
+next a
+jump in.Launcher loop
+variable a loop ${nLoop}
+variable a loop 25
+variable vz equal ${vmax}/${nLoop}*${a}
+variable vz equal 0.2/${nLoop}*${a}
+variable vz equal 0.2/25*${a}
+variable vz equal 0.2/25*6
+print "A = ${vz}"
+A = 0.048
+run ${dvtimeStep}
+run 1600
+Setting up run at Mon Apr 22 01:35:49 2019
+
+Memory usage per processor = 11.0141 Mbytes
+    Step    Atoms         KinEng            CPU 
+  318001      500   0.0014044197              0 
+  319601      500   0.0020472395      2.4987224 
+Loop time of 2.4988 on 4 procs for 1600 steps with 500 atoms, finish time Mon Apr 22 01:35:51 2019
+
+
+Pair  time (%) = 0.02203 (0.88162)
+Neigh time (%) = 0.257291 (10.2966)
+Comm  time (%) = 0.110775 (4.4331)
+Outpt time (%) = 3.54413e-05 (0.00141833)
+Other time (%) = 2.10867 (84.3873)
+
+Nlocal:    125 ave 500 max 0 min
+Histogram: 3 0 0 0 0 0 0 0 0 1
+Nghost:    0 ave 0 max 0 min
+Histogram: 4 0 0 0 0 0 0 0 0 0
+Neighs:    329.5 ave 1318 max 0 min
+Histogram: 3 0 0 0 0 0 0 0 0 1
+
+Total # of neighbors = 1318
+Ave neighs/atom = 2.636
+Neighbor list builds = 1600
+Dangerous builds = 0
+next a
+jump in.Launcher loop
+variable a loop ${nLoop}
+variable a loop 25
+variable vz equal ${vmax}/${nLoop}*${a}
+variable vz equal 0.2/${nLoop}*${a}
+variable vz equal 0.2/25*${a}
+variable vz equal 0.2/25*7
+print "A = ${vz}"
+A = 0.056
+run ${dvtimeStep}
+run 1600
+Setting up run at Mon Apr 22 01:35:51 2019
+
+Memory usage per processor = 11.0141 Mbytes
+    Step    Atoms         KinEng            CPU 
+  319601      500   0.0020472395              0 
+  321201      500   0.0021669428      2.1678113 
+Loop time of 2.16789 on 4 procs for 1600 steps with 500 atoms, finish time Mon Apr 22 01:35:54 2019
+
+
+Pair  time (%) = 0.0209935 (0.968384)
+Neigh time (%) = 0.249993 (11.5316)
+Comm  time (%) = 0.0837036 (3.86105)
+Outpt time (%) = 0.00274733 (0.126728)
+Other time (%) = 1.81046 (83.5122)
+
+Nlocal:    125 ave 500 max 0 min
+Histogram: 3 0 0 0 0 0 0 0 0 1
+Nghost:    0 ave 0 max 0 min
+Histogram: 4 0 0 0 0 0 0 0 0 0
+Neighs:    326 ave 1304 max 0 min
+Histogram: 3 0 0 0 0 0 0 0 0 1
+
+Total # of neighbors = 1304
+Ave neighs/atom = 2.608
+Neighbor list builds = 1600
+Dangerous builds = 0
+next a
+jump in.Launcher loop
+variable a loop ${nLoop}
+variable a loop 25
+variable vz equal ${vmax}/${nLoop}*${a}
+variable vz equal 0.2/${nLoop}*${a}
+variable vz equal 0.2/25*${a}
+variable vz equal 0.2/25*8
+print "A = ${vz}"
+A = 0.064
+run ${dvtimeStep}
+run 1600
+Setting up run at Mon Apr 22 01:35:54 2019
+
+Memory usage per processor = 11.0141 Mbytes
+    Step    Atoms         KinEng            CPU 
+  321201      500   0.0021669428              0 
+  322801      500   0.0031189417      2.1439441 
+Loop time of 2.14409 on 4 procs for 1600 steps with 500 atoms, finish time Mon Apr 22 01:35:56 2019
+
+
+Pair  time (%) = 0.0203769 (0.950375)
+Neigh time (%) = 0.252747 (11.7881)
+Comm  time (%) = 0.0781124 (3.64315)
+Outpt time (%) = 0.00278813 (0.130038)
+Other time (%) = 1.79006 (83.4884)
+
+Nlocal:    125 ave 500 max 0 min
+Histogram: 3 0 0 0 0 0 0 0 0 1
+Nghost:    0 ave 0 max 0 min
+Histogram: 4 0 0 0 0 0 0 0 0 0
+Neighs:    325.5 ave 1302 max 0 min
+Histogram: 3 0 0 0 0 0 0 0 0 1
+
+Total # of neighbors = 1302
+Ave neighs/atom = 2.604
+Neighbor list builds = 1600
+Dangerous builds = 0
+next a
+jump in.Launcher loop
+variable a loop ${nLoop}
+variable a loop 25
+variable vz equal ${vmax}/${nLoop}*${a}
+variable vz equal 0.2/${nLoop}*${a}
+variable vz equal 0.2/25*${a}
+variable vz equal 0.2/25*9
+print "A = ${vz}"
+A = 0.072
+run ${dvtimeStep}
+run 1600
+Setting up run at Mon Apr 22 01:35:56 2019
+
+Memory usage per processor = 11.0141 Mbytes
+    Step    Atoms         KinEng            CPU 
+  322801      500   0.0031189417              0 
+  324401      500   0.0031630181      2.2219049 
+Loop time of 2.22196 on 4 procs for 1600 steps with 500 atoms, finish time Mon Apr 22 01:35:58 2019
+
+
+Pair  time (%) = 0.0209127 (0.941183)
+Neigh time (%) = 0.2545 (11.4539)
+Comm  time (%) = 0.0828386 (3.72818)
+Outpt time (%) = 0.00226621 (0.101992)
+Other time (%) = 1.86144 (83.7748)
+
+Nlocal:    125 ave 500 max 0 min
+Histogram: 3 0 0 0 0 0 0 0 0 1
+Nghost:    0 ave 0 max 0 min
+Histogram: 4 0 0 0 0 0 0 0 0 0
+Neighs:    327 ave 1308 max 0 min
+Histogram: 3 0 0 0 0 0 0 0 0 1
+
+Total # of neighbors = 1308
+Ave neighs/atom = 2.616
+Neighbor list builds = 1600
+Dangerous builds = 0
+next a
+jump in.Launcher loop
+variable a loop ${nLoop}
+variable a loop 25
+variable vz equal ${vmax}/${nLoop}*${a}
+variable vz equal 0.2/${nLoop}*${a}
+variable vz equal 0.2/25*${a}
+variable vz equal 0.2/25*10
+print "A = ${vz}"
+A = 0.08
+run ${dvtimeStep}
+run 1600
+Setting up run at Mon Apr 22 01:35:58 2019
+
+Memory usage per processor = 11.0141 Mbytes
+    Step    Atoms         KinEng            CPU 
+  324401      500   0.0031630181              0 
+  326001      500   0.0034028649      2.1681861 
+Loop time of 2.16833 on 4 procs for 1600 steps with 500 atoms, finish time Mon Apr 22 01:36:00 2019
+
+
+Pair  time (%) = 0.0214741 (0.99035)
+Neigh time (%) = 0.252099 (11.6264)
+Comm  time (%) = 0.0850602 (3.92284)
+Outpt time (%) = 0.00233169 (0.107534)
+Other time (%) = 1.80737 (83.3529)
+
+Nlocal:    125 ave 500 max 0 min
+Histogram: 3 0 0 0 0 0 0 0 0 1
+Nghost:    0 ave 0 max 0 min
+Histogram: 4 0 0 0 0 0 0 0 0 0
+Neighs:    329.5 ave 1318 max 0 min
+Histogram: 3 0 0 0 0 0 0 0 0 1
+
+Total # of neighbors = 1318
+Ave neighs/atom = 2.636
+Neighbor list builds = 1600
+Dangerous builds = 0
+next a
+jump in.Launcher loop
+variable a loop ${nLoop}
+variable a loop 25
+variable vz equal ${vmax}/${nLoop}*${a}
+variable vz equal 0.2/${nLoop}*${a}
+variable vz equal 0.2/25*${a}
+variable vz equal 0.2/25*11
+print "A = ${vz}"
+A = 0.088
+run ${dvtimeStep}
+run 1600
+Setting up run at Mon Apr 22 01:36:00 2019
+
+Memory usage per processor = 11.0141 Mbytes
+    Step    Atoms         KinEng            CPU 
+  326001      500   0.0034028649              0 
+  327601      500   0.0048970982      2.1816002 
+Loop time of 2.18174 on 4 procs for 1600 steps with 500 atoms, finish time Mon Apr 22 01:36:02 2019
+
+
+Pair  time (%) = 0.0207242 (0.949891)
+Neigh time (%) = 0.251426 (11.5241)
+Comm  time (%) = 0.0759002 (3.47888)
+Outpt time (%) = 5.18855e-05 (0.00237817)
+Other time (%) = 1.83364 (84.0448)
+
+Nlocal:    125 ave 500 max 0 min
+Histogram: 3 0 0 0 0 0 0 0 0 1
+Nghost:    0 ave 0 max 0 min
+Histogram: 4 0 0 0 0 0 0 0 0 0
+Neighs:    331.25 ave 1325 max 0 min
+Histogram: 3 0 0 0 0 0 0 0 0 1
+
+Total # of neighbors = 1325
+Ave neighs/atom = 2.65
+Neighbor list builds = 1600
+Dangerous builds = 0
+next a
+jump in.Launcher loop
+variable a loop ${nLoop}
+variable a loop 25
+variable vz equal ${vmax}/${nLoop}*${a}
+variable vz equal 0.2/${nLoop}*${a}
+variable vz equal 0.2/25*${a}
+variable vz equal 0.2/25*12
+print "A = ${vz}"
+A = 0.096
+run ${dvtimeStep}
+run 1600
+Setting up run at Mon Apr 22 01:36:02 2019
+
+Memory usage per processor = 11.0141 Mbytes
+    Step    Atoms         KinEng            CPU 
+  327601      500   0.0048970982              0 
+  329201      500   0.0054403574      2.1947871 
+Loop time of 2.19489 on 4 procs for 1600 steps with 500 atoms, finish time Mon Apr 22 01:36:04 2019
+
+
+Pair  time (%) = 0.0208013 (0.947715)
+Neigh time (%) = 0.253813 (11.5638)
+Comm  time (%) = 0.0911818 (4.15428)
+Outpt time (%) = 0.00231469 (0.105458)
+Other time (%) = 1.82678 (83.2287)
+
+Nlocal:    125 ave 500 max 0 min
+Histogram: 3 0 0 0 0 0 0 0 0 1
+Nghost:    0 ave 0 max 0 min
+Histogram: 4 0 0 0 0 0 0 0 0 0
+Neighs:    331.25 ave 1325 max 0 min
+Histogram: 3 0 0 0 0 0 0 0 0 1
+
+Total # of neighbors = 1325
+Ave neighs/atom = 2.65
+Neighbor list builds = 1600
+Dangerous builds = 0
+next a
+jump in.Launcher loop
+variable a loop ${nLoop}
+variable a loop 25
+variable vz equal ${vmax}/${nLoop}*${a}
+variable vz equal 0.2/${nLoop}*${a}
+variable vz equal 0.2/25*${a}
+variable vz equal 0.2/25*13
+print "A = ${vz}"
+A = 0.104
+run ${dvtimeStep}
+run 1600
+Setting up run at Mon Apr 22 01:36:04 2019
+
+Memory usage per processor = 11.0141 Mbytes
+    Step    Atoms         KinEng            CPU 
+  329201      500   0.0054403574              0 
+  330801      500   0.0057069086      2.2182607 
+Loop time of 2.21836 on 4 procs for 1600 steps with 500 atoms, finish time Mon Apr 22 01:36:07 2019
+
+
+Pair  time (%) = 0.020794 (0.93736)
+Neigh time (%) = 0.253977 (11.4489)
+Comm  time (%) = 0.0936595 (4.22202)
+Outpt time (%) = 0.00231768 (0.104477)
+Other time (%) = 1.84761 (83.2873)
+
+Nlocal:    125 ave 500 max 0 min
+Histogram: 3 0 0 0 0 0 0 0 0 1
+Nghost:    0 ave 0 max 0 min
+Histogram: 4 0 0 0 0 0 0 0 0 0
+Neighs:    331.25 ave 1325 max 0 min
+Histogram: 3 0 0 0 0 0 0 0 0 1
+
+Total # of neighbors = 1325
+Ave neighs/atom = 2.65
+Neighbor list builds = 1600
+Dangerous builds = 0
+next a
+jump in.Launcher loop
+variable a loop ${nLoop}
+variable a loop 25
+variable vz equal ${vmax}/${nLoop}*${a}
+variable vz equal 0.2/${nLoop}*${a}
+variable vz equal 0.2/25*${a}
+variable vz equal 0.2/25*14
+print "A = ${vz}"
+A = 0.112
+run ${dvtimeStep}
+run 1600
+Setting up run at Mon Apr 22 01:36:07 2019
+
+Memory usage per processor = 11.0141 Mbytes
+    Step    Atoms         KinEng            CPU 
+  330801      500   0.0057069086              0 
+  332401      500   0.0074392386      2.2664432 
+Loop time of 2.26658 on 4 procs for 1600 steps with 500 atoms, finish time Mon Apr 22 01:36:09 2019
+
+
+Pair  time (%) = 0.0209647 (0.924947)
+Neigh time (%) = 0.252809 (11.1537)
+Comm  time (%) = 0.111506 (4.91957)
+Outpt time (%) = 0.002855 (0.12596)
+Other time (%) = 1.87845 (82.8758)
+
+Nlocal:    125 ave 500 max 0 min
+Histogram: 3 0 0 0 0 0 0 0 0 1
+Nghost:    0 ave 0 max 0 min
+Histogram: 4 0 0 0 0 0 0 0 0 0
+Neighs:    331 ave 1324 max 0 min
+Histogram: 3 0 0 0 0 0 0 0 0 1
+
+Total # of neighbors = 1324
+Ave neighs/atom = 2.648
+Neighbor list builds = 1600
+Dangerous builds = 0
+next a
+jump in.Launcher loop
+variable a loop ${nLoop}
+variable a loop 25
+variable vz equal ${vmax}/${nLoop}*${a}
+variable vz equal 0.2/${nLoop}*${a}
+variable vz equal 0.2/25*${a}
+variable vz equal 0.2/25*15
+print "A = ${vz}"
+A = 0.12
+run ${dvtimeStep}
+run 1600
+Setting up run at Mon Apr 22 01:36:09 2019
+
+Memory usage per processor = 11.0141 Mbytes
+    Step    Atoms         KinEng            CPU 
+  332401      500   0.0074392386              0 
+  334001      500   0.0078116844      2.6248514 
+Loop time of 2.62495 on 4 procs for 1600 steps with 500 atoms, finish time Mon Apr 22 01:36:12 2019
+
+
+Pair  time (%) = 0.0223367 (0.850939)
+Neigh time (%) = 0.261694 (9.96948)
+Comm  time (%) = 0.140139 (5.33872)
+Outpt time (%) = 0.010752 (0.409608)
+Other time (%) = 2.19003 (83.4312)
+
+Nlocal:    125 ave 500 max 0 min
+Histogram: 3 0 0 0 0 0 0 0 0 1
+Nghost:    0 ave 0 max 0 min
+Histogram: 4 0 0 0 0 0 0 0 0 0
+Neighs:    334 ave 1336 max 0 min
+Histogram: 3 0 0 0 0 0 0 0 0 1
+
+Total # of neighbors = 1336
+Ave neighs/atom = 2.672
+Neighbor list builds = 1600
+Dangerous builds = 0
+next a
+jump in.Launcher loop
+variable a loop ${nLoop}
+variable a loop 25
+variable vz equal ${vmax}/${nLoop}*${a}
+variable vz equal 0.2/${nLoop}*${a}
+variable vz equal 0.2/25*${a}
+variable vz equal 0.2/25*16
+print "A = ${vz}"
+A = 0.128
+run ${dvtimeStep}
+run 1600
+Setting up run at Mon Apr 22 01:36:12 2019
+
+Memory usage per processor = 11.0141 Mbytes
+    Step    Atoms         KinEng            CPU 
+  334001      500   0.0078116844              0 
+  335601      500   0.0085662599      2.2273027 
+Loop time of 2.22747 on 4 procs for 1600 steps with 500 atoms, finish time Mon Apr 22 01:36:14 2019
+
+
+Pair  time (%) = 0.0210551 (0.945245)
+Neigh time (%) = 0.254597 (11.4298)
+Comm  time (%) = 0.0987566 (4.43357)
+Outpt time (%) = 5.93548e-05 (0.00266467)
+Other time (%) = 1.85301 (83.1887)
+
+Nlocal:    125 ave 500 max 0 min
+Histogram: 3 0 0 0 0 0 0 0 0 1
+Nghost:    0 ave 0 max 0 min
+Histogram: 4 0 0 0 0 0 0 0 0 0
+Neighs:    332.75 ave 1331 max 0 min
+Histogram: 3 0 0 0 0 0 0 0 0 1
+
+Total # of neighbors = 1331
+Ave neighs/atom = 2.662
+Neighbor list builds = 1600
+Dangerous builds = 0
+next a
+jump in.Launcher loop
+variable a loop ${nLoop}
+variable a loop 25
+variable vz equal ${vmax}/${nLoop}*${a}
+variable vz equal 0.2/${nLoop}*${a}
+variable vz equal 0.2/25*${a}
+variable vz equal 0.2/25*17
+print "A = ${vz}"
+A = 0.136
+run ${dvtimeStep}
+run 1600
+Setting up run at Mon Apr 22 01:36:14 2019
+
+Memory usage per processor = 11.0141 Mbytes
+    Step    Atoms         KinEng            CPU 
+  335601      500   0.0085662599              0 
+  337201      500    0.010429188      2.1315524 
+Loop time of 2.13168 on 4 procs for 1600 steps with 500 atoms, finish time Mon Apr 22 01:36:16 2019
+
+
+Pair  time (%) = 0.0205156 (0.962415)
+Neigh time (%) = 0.247573 (11.614)
+Comm  time (%) = 0.0796799 (3.73789)
+Outpt time (%) = 0.00229004 (0.107429)
+Other time (%) = 1.78162 (83.5783)
+
+Nlocal:    125 ave 500 max 0 min
+Histogram: 3 0 0 0 0 0 0 0 0 1
+Nghost:    0 ave 0 max 0 min
+Histogram: 4 0 0 0 0 0 0 0 0 0
+Neighs:    336 ave 1344 max 0 min
+Histogram: 3 0 0 0 0 0 0 0 0 1
+
+Total # of neighbors = 1344
+Ave neighs/atom = 2.688
+Neighbor list builds = 1600
+Dangerous builds = 0
+next a
+jump in.Launcher loop
+variable a loop ${nLoop}
+variable a loop 25
+variable vz equal ${vmax}/${nLoop}*${a}
+variable vz equal 0.2/${nLoop}*${a}
+variable vz equal 0.2/25*${a}
+variable vz equal 0.2/25*18
+print "A = ${vz}"
+A = 0.144
+run ${dvtimeStep}
+run 1600
+Setting up run at Mon Apr 22 01:36:16 2019
+
+Memory usage per processor = 11.0141 Mbytes
+    Step    Atoms         KinEng            CPU 
+  337201      500    0.010429188              0 
+  338801      500    0.011113941      2.3410747 
+Loop time of 2.34117 on 4 procs for 1600 steps with 500 atoms, finish time Mon Apr 22 01:36:18 2019
+
+
+Pair  time (%) = 0.0214038 (0.914236)
+Neigh time (%) = 0.251137 (10.727)
+Comm  time (%) = 0.133367 (5.6966)
+Outpt time (%) = 0.00289399 (0.123613)
+Other time (%) = 1.93237 (82.5386)
+
+Nlocal:    125 ave 500 max 0 min
+Histogram: 3 0 0 0 0 0 0 0 0 1
+Nghost:    0 ave 0 max 0 min
+Histogram: 4 0 0 0 0 0 0 0 0 0
+Neighs:    338.75 ave 1355 max 0 min
+Histogram: 3 0 0 0 0 0 0 0 0 1
+
+Total # of neighbors = 1355
+Ave neighs/atom = 2.71
+Neighbor list builds = 1600
+Dangerous builds = 0
+next a
+jump in.Launcher loop
+variable a loop ${nLoop}
+variable a loop 25
+variable vz equal ${vmax}/${nLoop}*${a}
+variable vz equal 0.2/${nLoop}*${a}
+variable vz equal 0.2/25*${a}
+variable vz equal 0.2/25*19
+print "A = ${vz}"
+A = 0.152
+run ${dvtimeStep}
+run 1600
+Setting up run at Mon Apr 22 01:36:18 2019
+
+Memory usage per processor = 11.0141 Mbytes
+    Step    Atoms         KinEng            CPU 
+  338801      500    0.011113941              0 
+  340401      500    0.011868417      2.5199096 
+Loop time of 2.52002 on 4 procs for 1600 steps with 500 atoms, finish time Mon Apr 22 01:36:21 2019
+
+
+Pair  time (%) = 0.0223714 (0.887748)
+Neigh time (%) = 0.249973 (9.91951)
+Comm  time (%) = 0.11678 (4.63408)
+Outpt time (%) = 0.00516974 (0.205147)
+Other time (%) = 2.12572 (84.3535)
+
+Nlocal:    125 ave 500 max 0 min
+Histogram: 3 0 0 0 0 0 0 0 0 1
+Nghost:    0 ave 0 max 0 min
+Histogram: 4 0 0 0 0 0 0 0 0 0
+Neighs:    337 ave 1348 max 0 min
+Histogram: 3 0 0 0 0 0 0 0 0 1
+
+Total # of neighbors = 1348
+Ave neighs/atom = 2.696
+Neighbor list builds = 1600
+Dangerous builds = 0
+next a
+jump in.Launcher loop
+variable a loop ${nLoop}
+variable a loop 25
+variable vz equal ${vmax}/${nLoop}*${a}
+variable vz equal 0.2/${nLoop}*${a}
+variable vz equal 0.2/25*${a}
+variable vz equal 0.2/25*20
+print "A = ${vz}"
+A = 0.16
+run ${dvtimeStep}
+run 1600
+Setting up run at Mon Apr 22 01:36:21 2019
+
+Memory usage per processor = 11.0141 Mbytes
+    Step    Atoms         KinEng            CPU 
+  340401      500    0.011868417              0 
+  342001      500    0.014013861      2.3664377 
+Loop time of 2.36654 on 4 procs for 1600 steps with 500 atoms, finish time Mon Apr 22 01:36:23 2019
+
+
+Pair  time (%) = 0.021663 (0.915389)
+Neigh time (%) = 0.251643 (10.6334)
+Comm  time (%) = 0.0945257 (3.99426)
+Outpt time (%) = 0.00227691 (0.0962126)
+Other time (%) = 1.99643 (84.3607)
+
+Nlocal:    125 ave 500 max 0 min
+Histogram: 3 0 0 0 0 0 0 0 0 1
+Nghost:    0 ave 0 max 0 min
+Histogram: 4 0 0 0 0 0 0 0 0 0
+Neighs:    337.5 ave 1350 max 0 min
+Histogram: 3 0 0 0 0 0 0 0 0 1
+
+Total # of neighbors = 1350
+Ave neighs/atom = 2.7
+Neighbor list builds = 1600
+Dangerous builds = 0
+next a
+jump in.Launcher loop
+variable a loop ${nLoop}
+variable a loop 25
+variable vz equal ${vmax}/${nLoop}*${a}
+variable vz equal 0.2/${nLoop}*${a}
+variable vz equal 0.2/25*${a}
+variable vz equal 0.2/25*21
+print "A = ${vz}"
+A = 0.168
+run ${dvtimeStep}
+run 1600
+Setting up run at Mon Apr 22 01:36:23 2019
+
+Memory usage per processor = 11.0141 Mbytes
+    Step    Atoms         KinEng            CPU 
+  342001      500    0.014013861              0 
+  343601      500    0.014799841      2.3048345 
+Loop time of 2.30493 on 4 procs for 1600 steps with 500 atoms, finish time Mon Apr 22 01:36:26 2019
+
+
+Pair  time (%) = 0.0221013 (0.958872)
+Neigh time (%) = 0.256922 (11.1466)
+Comm  time (%) = 0.0800445 (3.47275)
+Outpt time (%) = 3.7155e-05 (0.00161198)
+Other time (%) = 1.94583 (84.4201)
+
+Nlocal:    125 ave 500 max 0 min
+Histogram: 3 0 0 0 0 0 0 0 0 1
+Nghost:    0 ave 0 max 0 min
+Histogram: 4 0 0 0 0 0 0 0 0 0
+Neighs:    339.25 ave 1357 max 0 min
+Histogram: 3 0 0 0 0 0 0 0 0 1
+
+Total # of neighbors = 1357
+Ave neighs/atom = 2.714
+Neighbor list builds = 1600
+Dangerous builds = 0
+next a
+jump in.Launcher loop
+variable a loop ${nLoop}
+variable a loop 25
+variable vz equal ${vmax}/${nLoop}*${a}
+variable vz equal 0.2/${nLoop}*${a}
+variable vz equal 0.2/25*${a}
+variable vz equal 0.2/25*22
+print "A = ${vz}"
+A = 0.176
+run ${dvtimeStep}
+run 1600
+Setting up run at Mon Apr 22 01:36:26 2019
+
+Memory usage per processor = 11.0141 Mbytes
+    Step    Atoms         KinEng            CPU 
+  343601      500    0.014799841              0 
+  345201      500    0.015836171      2.2820974 
+Loop time of 2.28257 on 4 procs for 1600 steps with 500 atoms, finish time Mon Apr 22 01:36:28 2019
+
+
+Pair  time (%) = 0.0217595 (0.953289)
+Neigh time (%) = 0.251717 (11.0278)
+Comm  time (%) = 0.0856508 (3.75238)
+Outpt time (%) = 0.00243088 (0.106497)
+Other time (%) = 1.92102 (84.1601)
+
+Nlocal:    125 ave 500 max 0 min
+Histogram: 3 0 0 0 0 0 0 0 0 1
+Nghost:    0 ave 0 max 0 min
+Histogram: 4 0 0 0 0 0 0 0 0 0
+Neighs:    339.5 ave 1358 max 0 min
+Histogram: 3 0 0 0 0 0 0 0 0 1
+
+Total # of neighbors = 1358
+Ave neighs/atom = 2.716
+Neighbor list builds = 1600
+Dangerous builds = 0
+next a
+jump in.Launcher loop
+variable a loop ${nLoop}
+variable a loop 25
+variable vz equal ${vmax}/${nLoop}*${a}
+variable vz equal 0.2/${nLoop}*${a}
+variable vz equal 0.2/25*${a}
+variable vz equal 0.2/25*23
+print "A = ${vz}"
+A = 0.184
+run ${dvtimeStep}
+run 1600
+Setting up run at Mon Apr 22 01:36:28 2019
+
+Memory usage per processor = 11.0141 Mbytes
+    Step    Atoms         KinEng            CPU 
+  345201      500    0.015836171              0 
+  346801      500    0.018078241      2.0828133 
+Loop time of 2.08295 on 4 procs for 1600 steps with 500 atoms, finish time Mon Apr 22 01:36:30 2019
+
+
+Pair  time (%) = 0.0209813 (1.00729)
+Neigh time (%) = 0.251796 (12.0884)
+Comm  time (%) = 0.0690657 (3.31576)
+Outpt time (%) = 0.00235454 (0.113038)
+Other time (%) = 1.73875 (83.4755)
+
+Nlocal:    125 ave 500 max 0 min
+Histogram: 3 0 0 0 0 0 0 0 0 1
+Nghost:    0 ave 0 max 0 min
+Histogram: 4 0 0 0 0 0 0 0 0 0
+Neighs:    340 ave 1360 max 0 min
+Histogram: 3 0 0 0 0 0 0 0 0 1
+
+Total # of neighbors = 1360
+Ave neighs/atom = 2.72
+Neighbor list builds = 1600
+Dangerous builds = 0
+next a
+jump in.Launcher loop
+variable a loop ${nLoop}
+variable a loop 25
+variable vz equal ${vmax}/${nLoop}*${a}
+variable vz equal 0.2/${nLoop}*${a}
+variable vz equal 0.2/25*${a}
+variable vz equal 0.2/25*24
+print "A = ${vz}"
+A = 0.192
+run ${dvtimeStep}
+run 1600
+Setting up run at Mon Apr 22 01:36:30 2019
+
+Memory usage per processor = 11.0141 Mbytes
+    Step    Atoms         KinEng            CPU 
+  346801      500    0.018078241              0 
+  348401      500    0.019188137      2.2911583 
+Loop time of 2.2912 on 4 procs for 1600 steps with 500 atoms, finish time Mon Apr 22 01:36:32 2019
+
+
+Pair  time (%) = 0.0212198 (0.926141)
+Neigh time (%) = 0.254345 (11.1009)
+Comm  time (%) = 0.0962797 (4.20215)
+Outpt time (%) = 0.00270189 (0.117925)
+Other time (%) = 1.91666 (83.6528)
+
+Nlocal:    125 ave 500 max 0 min
+Histogram: 3 0 0 0 0 0 0 0 0 1
+Nghost:    0 ave 0 max 0 min
+Histogram: 4 0 0 0 0 0 0 0 0 0
+Neighs:    339.75 ave 1359 max 0 min
+Histogram: 3 0 0 0 0 0 0 0 0 1
+
+Total # of neighbors = 1359
+Ave neighs/atom = 2.718
+Neighbor list builds = 1600
+Dangerous builds = 0
+next a
+jump in.Launcher loop
+variable a loop ${nLoop}
+variable a loop 25
+variable vz equal ${vmax}/${nLoop}*${a}
+variable vz equal 0.2/${nLoop}*${a}
+variable vz equal 0.2/25*${a}
+variable vz equal 0.2/25*25
+print "A = ${vz}"
+A = 0.2
+run ${dvtimeStep}
+run 1600
+Setting up run at Mon Apr 22 01:36:32 2019
+
+Memory usage per processor = 11.0141 Mbytes
+    Step    Atoms         KinEng            CPU 
+  348401      500    0.019188137              0 
+  350001      500    0.020233526      2.3053509 
+Loop time of 2.30549 on 4 procs for 1600 steps with 500 atoms, finish time Mon Apr 22 01:36:34 2019
+
+
+Pair  time (%) = 0.0212803 (0.923027)
+Neigh time (%) = 0.251881 (10.9253)
+Comm  time (%) = 0.0962878 (4.17646)
+Outpt time (%) = 0.00238784 (0.103572)
+Other time (%) = 1.93365 (83.8716)
+
+Nlocal:    125 ave 500 max 0 min
+Histogram: 3 0 0 0 0 0 0 0 0 1
+Nghost:    0 ave 0 max 0 min
+Histogram: 4 0 0 0 0 0 0 0 0 0
+Neighs:    338.25 ave 1353 max 0 min
+Histogram: 3 0 0 0 0 0 0 0 0 1
+
+Total # of neighbors = 1353
+Ave neighs/atom = 2.706
+Neighbor list builds = 1600
+Dangerous builds = 0
+next a
+jump in.Launcher loop
+variable vz equal ${vmax}
+variable vz equal 0.2
+
+label loop2
+variable b loop ${nLoop}
+variable b loop 25
+variable vz equal ${vmax}-(${vmax}/${nLoop}*v_b)
+variable vz equal 0.2-(${vmax}/${nLoop}*v_b)
+variable vz equal 0.2-(0.2/${nLoop}*v_b)
+variable vz equal 0.2-(0.2/25*v_b)
+print "A = ${vz}"
+A = 0.192
+run ${dvtimeStep}
+run 1600
+Setting up run at Mon Apr 22 01:36:34 2019
+
+Memory usage per processor = 11.0141 Mbytes
+    Step    Atoms         KinEng            CPU 
+  350001      500    0.020233526              0 
+  351601      500    0.020232304      2.5049963 
+Loop time of 2.50505 on 4 procs for 1600 steps with 500 atoms, finish time Mon Apr 22 01:36:37 2019
+
+
+Pair  time (%) = 0.0212724 (0.849182)
+Neigh time (%) = 0.253853 (10.1337)
+Comm  time (%) = 0.180843 (7.21915)
+Outpt time (%) = 2.04638e-05 (0.000816901)
+Other time (%) = 2.04906 (81.7972)
+
+Nlocal:    125 ave 500 max 0 min
+Histogram: 3 0 0 0 0 0 0 0 0 1
+Nghost:    0 ave 0 max 0 min
+Histogram: 4 0 0 0 0 0 0 0 0 0
+Neighs:    337.25 ave 1349 max 0 min
+Histogram: 3 0 0 0 0 0 0 0 0 1
+
+Total # of neighbors = 1349
+Ave neighs/atom = 2.698
+Neighbor list builds = 1600
+Dangerous builds = 0
+next b
+jump in.Launcher loop2
+variable b loop ${nLoop}
+variable b loop 25
+variable vz equal ${vmax}-(${vmax}/${nLoop}*v_b)
+variable vz equal 0.2-(${vmax}/${nLoop}*v_b)
+variable vz equal 0.2-(0.2/${nLoop}*v_b)
+variable vz equal 0.2-(0.2/25*v_b)
+print "A = ${vz}"
+A = 0.184
+run ${dvtimeStep}
+run 1600
+Setting up run at Mon Apr 22 01:36:37 2019
+
+Memory usage per processor = 11.0141 Mbytes
+    Step    Atoms         KinEng            CPU 
+  351601      500    0.020232304              0 
+  353201      500    0.020231898      2.5036261 
+Loop time of 2.50373 on 4 procs for 1600 steps with 500 atoms, finish time Mon Apr 22 01:36:40 2019
+
+
+Pair  time (%) = 0.0216317 (0.863977)
+Neigh time (%) = 0.251342 (10.0387)
+Comm  time (%) = 0.131345 (5.24598)
+Outpt time (%) = 0.0101208 (0.404227)
+Other time (%) = 2.08929 (83.4471)
+
+Nlocal:    125 ave 500 max 0 min
+Histogram: 3 0 0 0 0 0 0 0 0 1
+Nghost:    0 ave 0 max 0 min
+Histogram: 4 0 0 0 0 0 0 0 0 0
+Neighs:    334.75 ave 1339 max 0 min
+Histogram: 3 0 0 0 0 0 0 0 0 1
+
+Total # of neighbors = 1339
+Ave neighs/atom = 2.678
+Neighbor list builds = 1600
+Dangerous builds = 0
+next b
+jump in.Launcher loop2
+variable b loop ${nLoop}
+variable b loop 25
+variable vz equal ${vmax}-(${vmax}/${nLoop}*v_b)
+variable vz equal 0.2-(${vmax}/${nLoop}*v_b)
+variable vz equal 0.2-(0.2/${nLoop}*v_b)
+variable vz equal 0.2-(0.2/25*v_b)
+print "A = ${vz}"
+A = 0.176
+run ${dvtimeStep}
+run 1600
+Setting up run at Mon Apr 22 01:36:40 2019
+
+Memory usage per processor = 11.0141 Mbytes
+    Step    Atoms         KinEng            CPU 
+  353201      500    0.020231898              0 
+  354801      500    0.020231545      2.2439084 
+Loop time of 2.244 on 4 procs for 1600 steps with 500 atoms, finish time Mon Apr 22 01:36:42 2019
+
+
+Pair  time (%) = 0.0204472 (0.911194)
+Neigh time (%) = 0.250407 (11.1589)
+Comm  time (%) = 0.115503 (5.14719)
+Outpt time (%) = 0.00231594 (0.103206)
+Other time (%) = 1.85533 (82.6795)
+
+Nlocal:    125 ave 500 max 0 min
+Histogram: 3 0 0 0 0 0 0 0 0 1
+Nghost:    0 ave 0 max 0 min
+Histogram: 4 0 0 0 0 0 0 0 0 0
+Neighs:    332.5 ave 1330 max 0 min
+Histogram: 3 0 0 0 0 0 0 0 0 1
+
+Total # of neighbors = 1330
+Ave neighs/atom = 2.66
+Neighbor list builds = 1600
+Dangerous builds = 0
+next b
+jump in.Launcher loop2
+variable b loop ${nLoop}
+variable b loop 25
+variable vz equal ${vmax}-(${vmax}/${nLoop}*v_b)
+variable vz equal 0.2-(${vmax}/${nLoop}*v_b)
+variable vz equal 0.2-(0.2/${nLoop}*v_b)
+variable vz equal 0.2-(0.2/25*v_b)
+print "A = ${vz}"
+A = 0.168
+run ${dvtimeStep}
+run 1600
+Setting up run at Mon Apr 22 01:36:42 2019
+
+Memory usage per processor = 11.0141 Mbytes
+    Step    Atoms         KinEng            CPU 
+  354801      500    0.020231545              0 
+  356401      500     0.02023119      2.3118838 
+Loop time of 2.3119 on 4 procs for 1600 steps with 500 atoms, finish time Mon Apr 22 01:36:44 2019
+
+
+Pair  time (%) = 0.0216092 (0.934694)
+Neigh time (%) = 0.250939 (10.8542)
+Comm  time (%) = 0.120656 (5.21891)
+Outpt time (%) = 0.0027412 (0.118569)
+Other time (%) = 1.91595 (82.8736)
+
+Nlocal:    125 ave 500 max 0 min
+Histogram: 3 0 0 0 0 0 0 0 0 1
+Nghost:    0 ave 0 max 0 min
+Histogram: 4 0 0 0 0 0 0 0 0 0
+Neighs:    329.5 ave 1318 max 0 min
+Histogram: 3 0 0 0 0 0 0 0 0 1
+
+Total # of neighbors = 1318
+Ave neighs/atom = 2.636
+Neighbor list builds = 1600
+Dangerous builds = 0
+next b
+jump in.Launcher loop2
+variable b loop ${nLoop}
+variable b loop 25
+variable vz equal ${vmax}-(${vmax}/${nLoop}*v_b)
+variable vz equal 0.2-(${vmax}/${nLoop}*v_b)
+variable vz equal 0.2-(0.2/${nLoop}*v_b)
+variable vz equal 0.2-(0.2/25*v_b)
+print "A = ${vz}"
+A = 0.16
+run ${dvtimeStep}
+run 1600
+Setting up run at Mon Apr 22 01:36:44 2019
+
+Memory usage per processor = 11.0141 Mbytes
+    Step    Atoms         KinEng            CPU 
+  356401      500     0.02023119              0 
+  358001      500    0.020230846      2.2266233 
+Loop time of 2.22677 on 4 procs for 1600 steps with 500 atoms, finish time Mon Apr 22 01:36:46 2019
+
+
+Pair  time (%) = 0.0261391 (1.17386)
+Neigh time (%) = 0.26332 (11.8252)
+Comm  time (%) = 0.118798 (5.33497)
+Outpt time (%) = 0.00231552 (0.103986)
+Other time (%) = 1.8162 (81.562)
+
+Nlocal:    125 ave 500 max 0 min
+Histogram: 3 0 0 0 0 0 0 0 0 1
+Nghost:    0 ave 0 max 0 min
+Histogram: 4 0 0 0 0 0 0 0 0 0
+Neighs:    319.75 ave 1279 max 0 min
+Histogram: 3 0 0 0 0 0 0 0 0 1
+
+Total # of neighbors = 1279
+Ave neighs/atom = 2.558
+Neighbor list builds = 1600
+Dangerous builds = 0
+next b
+jump in.Launcher loop2
+variable b loop ${nLoop}
+variable b loop 25
+variable vz equal ${vmax}-(${vmax}/${nLoop}*v_b)
+variable vz equal 0.2-(${vmax}/${nLoop}*v_b)
+variable vz equal 0.2-(0.2/${nLoop}*v_b)
+variable vz equal 0.2-(0.2/25*v_b)
+print "A = ${vz}"
+A = 0.152
+run ${dvtimeStep}
+run 1600
+Setting up run at Mon Apr 22 01:36:46 2019
+
+Memory usage per processor = 11.0141 Mbytes
+    Step    Atoms         KinEng            CPU 
+  358001      500    0.020230846              0 
+  359601      500    0.020230515      1.8968668 
+Loop time of 1.89697 on 4 procs for 1600 steps with 500 atoms, finish time Mon Apr 22 01:36:48 2019
+
+
+Pair  time (%) = 0.0198369 (1.04572)
+Neigh time (%) = 0.253256 (13.3506)
+Comm  time (%) = 0.0908039 (4.78679)
+Outpt time (%) = 3.74887e-05 (0.00197624)
+Other time (%) = 1.53304 (80.815)
+
+Nlocal:    125 ave 500 max 0 min
+Histogram: 3 0 0 0 0 0 0 0 0 1
+Nghost:    0 ave 0 max 0 min
+Histogram: 4 0 0 0 0 0 0 0 0 0
+Neighs:    311.25 ave 1245 max 0 min
+Histogram: 3 0 0 0 0 0 0 0 0 1
+
+Total # of neighbors = 1245
+Ave neighs/atom = 2.49
+Neighbor list builds = 1600
+Dangerous builds = 0
+next b
+jump in.Launcher loop2
+variable b loop ${nLoop}
+variable b loop 25
+variable vz equal ${vmax}-(${vmax}/${nLoop}*v_b)
+variable vz equal 0.2-(${vmax}/${nLoop}*v_b)
+variable vz equal 0.2-(0.2/${nLoop}*v_b)
+variable vz equal 0.2-(0.2/25*v_b)
+print "A = ${vz}"
+A = 0.144
+run ${dvtimeStep}
+run 1600
+Setting up run at Mon Apr 22 01:36:48 2019
+
+Memory usage per processor = 11.0141 Mbytes
+    Step    Atoms         KinEng            CPU 
+  359601      500    0.020230515              0 
+  361201      500    0.020230174      1.8691442 
+Loop time of 1.86929 on 4 procs for 1600 steps with 500 atoms, finish time Mon Apr 22 01:36:50 2019
+
+
+Pair  time (%) = 0.0194651 (1.04131)
+Neigh time (%) = 0.253815 (13.5781)
+Comm  time (%) = 0.0663747 (3.55079)
+Outpt time (%) = 0.00249474 (0.133459)
+Other time (%) = 1.52714 (81.6963)
+
+Nlocal:    125 ave 500 max 0 min
+Histogram: 3 0 0 0 0 0 0 0 0 1
+Nghost:    0 ave 0 max 0 min
+Histogram: 4 0 0 0 0 0 0 0 0 0
+Neighs:    301.25 ave 1205 max 0 min
+Histogram: 3 0 0 0 0 0 0 0 0 1
+
+Total # of neighbors = 1205
+Ave neighs/atom = 2.41
+Neighbor list builds = 1600
+Dangerous builds = 0
+next b
+jump in.Launcher loop2
+variable b loop ${nLoop}
+variable b loop 25
+variable vz equal ${vmax}-(${vmax}/${nLoop}*v_b)
+variable vz equal 0.2-(${vmax}/${nLoop}*v_b)
+variable vz equal 0.2-(0.2/${nLoop}*v_b)
+variable vz equal 0.2-(0.2/25*v_b)
+print "A = ${vz}"
+A = 0.136
+run ${dvtimeStep}
+run 1600
+Setting up run at Mon Apr 22 01:36:50 2019
+
+Memory usage per processor = 11.0141 Mbytes
+    Step    Atoms         KinEng            CPU 
+  361201      500    0.020230174              0 
+  362801      500    0.020229338      1.8225457 
+Loop time of 1.82269 on 4 procs for 1600 steps with 500 atoms, finish time Mon Apr 22 01:36:52 2019
+
+
+Pair  time (%) = 0.0184644 (1.01303)
+Neigh time (%) = 0.256648 (14.0807)
+Comm  time (%) = 0.0660474 (3.62362)
+Outpt time (%) = 0.00231546 (0.127035)
+Other time (%) = 1.47921 (81.1556)
+
+Nlocal:    125 ave 500 max 0 min
+Histogram: 3 0 0 0 0 0 0 0 0 1
+Nghost:    0 ave 0 max 0 min
+Histogram: 4 0 0 0 0 0 0 0 0 0
+Neighs:    287.25 ave 1149 max 0 min
+Histogram: 3 0 0 0 0 0 0 0 0 1
+
+Total # of neighbors = 1149
+Ave neighs/atom = 2.298
+Neighbor list builds = 1600
+Dangerous builds = 0
+next b
+jump in.Launcher loop2
+variable b loop ${nLoop}
+variable b loop 25
+variable vz equal ${vmax}-(${vmax}/${nLoop}*v_b)
+variable vz equal 0.2-(${vmax}/${nLoop}*v_b)
+variable vz equal 0.2-(0.2/${nLoop}*v_b)
+variable vz equal 0.2-(0.2/25*v_b)
+print "A = ${vz}"
+A = 0.128
+run ${dvtimeStep}
+run 1600
+Setting up run at Mon Apr 22 01:36:52 2019
+
+Memory usage per processor = 11.0141 Mbytes
+    Step    Atoms         KinEng            CPU 
+  362801      500    0.020229338              0 
+  364401      500    0.020229007      1.8528288 
+Loop time of 1.85296 on 4 procs for 1600 steps with 500 atoms, finish time Mon Apr 22 01:36:54 2019
+
+
+Pair  time (%) = 0.0182552 (0.985191)
+Neigh time (%) = 0.258159 (13.9323)
+Comm  time (%) = 0.0661146 (3.56806)
+Outpt time (%) = 0.00246317 (0.132932)
+Other time (%) = 1.50796 (81.3815)
+
+Nlocal:    125 ave 500 max 0 min
+Histogram: 3 0 0 0 0 0 0 0 0 1
+Nghost:    0 ave 0 max 0 min
+Histogram: 4 0 0 0 0 0 0 0 0 0
+Neighs:    271.25 ave 1085 max 0 min
+Histogram: 3 0 0 0 0 0 0 0 0 1
+
+Total # of neighbors = 1085
+Ave neighs/atom = 2.17
+Neighbor list builds = 1600
+Dangerous builds = 0
+next b
+jump in.Launcher loop2
+variable b loop ${nLoop}
+variable b loop 25
+variable vz equal ${vmax}-(${vmax}/${nLoop}*v_b)
+variable vz equal 0.2-(${vmax}/${nLoop}*v_b)
+variable vz equal 0.2-(0.2/${nLoop}*v_b)
+variable vz equal 0.2-(0.2/25*v_b)
+print "A = ${vz}"
+A = 0.12
+run ${dvtimeStep}
+run 1600
+Setting up run at Mon Apr 22 01:36:54 2019
+
+Memory usage per processor = 11.0141 Mbytes
+    Step    Atoms         KinEng            CPU 
+  364401      500    0.020229007              0 
+  366001      500    0.020228675      1.9065253 
+Loop time of 1.9066 on 4 procs for 1600 steps with 500 atoms, finish time Mon Apr 22 01:36:56 2019
+
+
+Pair  time (%) = 0.0178409 (0.935744)
+Neigh time (%) = 0.268637 (14.0899)
+Comm  time (%) = 0.0646889 (3.3929)
+Outpt time (%) = 0.00228764 (0.119985)
+Other time (%) = 1.55314 (81.4615)
+
+Nlocal:    125 ave 500 max 0 min
+Histogram: 3 0 0 0 0 0 0 0 0 1
+Nghost:    0 ave 0 max 0 min
+Histogram: 4 0 0 0 0 0 0 0 0 0
+Neighs:    255.75 ave 1023 max 0 min
+Histogram: 3 0 0 0 0 0 0 0 0 1
+
+Total # of neighbors = 1023
+Ave neighs/atom = 2.046
+Neighbor list builds = 1600
+Dangerous builds = 0
+next b
+jump in.Launcher loop2
+variable b loop ${nLoop}
+variable b loop 25
+variable vz equal ${vmax}-(${vmax}/${nLoop}*v_b)
+variable vz equal 0.2-(${vmax}/${nLoop}*v_b)
+variable vz equal 0.2-(0.2/${nLoop}*v_b)
+variable vz equal 0.2-(0.2/25*v_b)
+print "A = ${vz}"
+A = 0.112
+run ${dvtimeStep}
+run 1600
+Setting up run at Mon Apr 22 01:36:56 2019
+
+Memory usage per processor = 11.0141 Mbytes
+    Step    Atoms         KinEng            CPU 
+  366001      500    0.020228675              0 
+  367601      500    0.020228337      1.9211183 
+Loop time of 1.92125 on 4 procs for 1600 steps with 500 atoms, finish time Mon Apr 22 01:36:58 2019
+
+
+Pair  time (%) = 0.0170561 (0.887761)
+Neigh time (%) = 0.260312 (13.5491)
+Comm  time (%) = 0.0802555 (4.17725)
+Outpt time (%) = 5.40315e-05 (0.0028123)
+Other time (%) = 1.56358 (81.3831)
+
+Nlocal:    125 ave 500 max 0 min
+Histogram: 3 0 0 0 0 0 0 0 0 1
+Nghost:    0 ave 0 max 0 min
+Histogram: 4 0 0 0 0 0 0 0 0 0
+Neighs:    239.5 ave 958 max 0 min
+Histogram: 3 0 0 0 0 0 0 0 0 1
+
+Total # of neighbors = 958
+Ave neighs/atom = 1.916
+Neighbor list builds = 1600
+Dangerous builds = 0
+next b
+jump in.Launcher loop2
+variable b loop ${nLoop}
+variable b loop 25
+variable vz equal ${vmax}-(${vmax}/${nLoop}*v_b)
+variable vz equal 0.2-(${vmax}/${nLoop}*v_b)
+variable vz equal 0.2-(0.2/${nLoop}*v_b)
+variable vz equal 0.2-(0.2/25*v_b)
+print "A = ${vz}"
+A = 0.104
+run ${dvtimeStep}
+run 1600
+Setting up run at Mon Apr 22 01:36:58 2019
+
+Memory usage per processor = 11.0141 Mbytes
+    Step    Atoms         KinEng            CPU 
+  367601      500    0.020228337              0 
+  369201      500    0.020228006      2.0799183 
+Loop time of 2.07995 on 4 procs for 1600 steps with 500 atoms, finish time Mon Apr 22 01:37:00 2019
+
+
+Pair  time (%) = 0.0183225 (0.880907)
+Neigh time (%) = 0.269194 (12.9423)
+Comm  time (%) = 0.077506 (3.72634)
+Outpt time (%) = 0.0023815 (0.114498)
+Other time (%) = 1.71255 (82.336)
+
+Nlocal:    125 ave 500 max 0 min
+Histogram: 3 0 0 0 0 0 0 0 0 1
+Nghost:    0 ave 0 max 0 min
+Histogram: 4 0 0 0 0 0 0 0 0 0
+Neighs:    227.25 ave 909 max 0 min
+Histogram: 3 0 0 0 0 0 0 0 0 1
+
+Total # of neighbors = 909
+Ave neighs/atom = 1.818
+Neighbor list builds = 1600
+Dangerous builds = 0
+next b
+jump in.Launcher loop2
+variable b loop ${nLoop}
+variable b loop 25
+variable vz equal ${vmax}-(${vmax}/${nLoop}*v_b)
+variable vz equal 0.2-(${vmax}/${nLoop}*v_b)
+variable vz equal 0.2-(0.2/${nLoop}*v_b)
+variable vz equal 0.2-(0.2/25*v_b)
+print "A = ${vz}"
+A = 0.096
+run ${dvtimeStep}
+run 1600
+Setting up run at Mon Apr 22 01:37:00 2019
+
+Memory usage per processor = 11.0141 Mbytes
+    Step    Atoms         KinEng            CPU 
+  369201      500    0.020228006              0 
+  370801      500    0.020227688      2.0321015 
+Loop time of 2.0322 on 4 procs for 1600 steps with 500 atoms, finish time Mon Apr 22 01:37:02 2019
+
+
+Pair  time (%) = 0.0158163 (0.778285)
+Neigh time (%) = 0.261626 (12.874)
+Comm  time (%) = 0.0927214 (4.5626)
+Outpt time (%) = 0.00246174 (0.121137)
+Other time (%) = 1.65958 (81.664)
+
+Nlocal:    125 ave 500 max 0 min
+Histogram: 3 0 0 0 0 0 0 0 0 1
+Nghost:    0 ave 0 max 0 min
+Histogram: 4 0 0 0 0 0 0 0 0 0
+Neighs:    218.5 ave 874 max 0 min
+Histogram: 3 0 0 0 0 0 0 0 0 1
+
+Total # of neighbors = 874
+Ave neighs/atom = 1.748
+Neighbor list builds = 1600
+Dangerous builds = 0
+next b
+jump in.Launcher loop2
+variable b loop ${nLoop}
+variable b loop 25
+variable vz equal ${vmax}-(${vmax}/${nLoop}*v_b)
+variable vz equal 0.2-(${vmax}/${nLoop}*v_b)
+variable vz equal 0.2-(0.2/${nLoop}*v_b)
+variable vz equal 0.2-(0.2/25*v_b)
+print "A = ${vz}"
+A = 0.088
+run ${dvtimeStep}
+run 1600
+Setting up run at Mon Apr 22 01:37:02 2019
+
+Memory usage per processor = 11.0141 Mbytes
+    Step    Atoms         KinEng            CPU 
+  370801      500    0.020227688              0 
+  372401      500    0.020227357      1.8113533 
+Loop time of 1.81139 on 4 procs for 1600 steps with 500 atoms, finish time Mon Apr 22 01:37:04 2019
+
+
+Pair  time (%) = 0.0153239 (0.845974)
+Neigh time (%) = 0.251221 (13.869)
+Comm  time (%) = 0.0768493 (4.24257)
+Outpt time (%) = 0.00247395 (0.136578)
+Other time (%) = 1.46552 (80.9059)
+
+Nlocal:    125 ave 500 max 0 min
+Histogram: 3 0 0 0 0 0 0 0 0 1
+Nghost:    0 ave 0 max 0 min
+Histogram: 4 0 0 0 0 0 0 0 0 0
+Neighs:    212.75 ave 851 max 0 min
+Histogram: 3 0 0 0 0 0 0 0 0 1
+
+Total # of neighbors = 851
+Ave neighs/atom = 1.702
+Neighbor list builds = 1600
+Dangerous builds = 0
+next b
+jump in.Launcher loop2
+variable b loop ${nLoop}
+variable b loop 25
+variable vz equal ${vmax}-(${vmax}/${nLoop}*v_b)
+variable vz equal 0.2-(${vmax}/${nLoop}*v_b)
+variable vz equal 0.2-(0.2/${nLoop}*v_b)
+variable vz equal 0.2-(0.2/25*v_b)
+print "A = ${vz}"
+A = 0.08
+run ${dvtimeStep}
+run 1600
+Setting up run at Mon Apr 22 01:37:04 2019
+
+Memory usage per processor = 11.0141 Mbytes
+    Step    Atoms         KinEng            CPU 
+  372401      500    0.020227357              0 
+  374001      500    0.020227022      2.1402919 
+Loop time of 2.14039 on 4 procs for 1600 steps with 500 atoms, finish time Mon Apr 22 01:37:06 2019
+
+
+Pair  time (%) = 0.0163489 (0.763826)
+Neigh time (%) = 0.260059 (12.15)
+Comm  time (%) = 0.13692 (6.39695)
+Outpt time (%) = 0.00228676 (0.106839)
+Other time (%) = 1.72478 (80.5823)
+
+Nlocal:    125 ave 500 max 0 min
+Histogram: 3 0 0 0 0 0 0 0 0 1
+Nghost:    0.25 ave 1 max 0 min
+Histogram: 3 0 0 0 0 0 0 0 0 1
+Neighs:    209.75 ave 839 max 0 min
+Histogram: 3 0 0 0 0 0 0 0 0 1
+
+Total # of neighbors = 839
+Ave neighs/atom = 1.678
+Neighbor list builds = 1600
+Dangerous builds = 0
+next b
+jump in.Launcher loop2
+variable b loop ${nLoop}
+variable b loop 25
+variable vz equal ${vmax}-(${vmax}/${nLoop}*v_b)
+variable vz equal 0.2-(${vmax}/${nLoop}*v_b)
+variable vz equal 0.2-(0.2/${nLoop}*v_b)
+variable vz equal 0.2-(0.2/25*v_b)
+print "A = ${vz}"
+A = 0.072
+run ${dvtimeStep}
+run 1600
+Setting up run at Mon Apr 22 01:37:06 2019
+
+Memory usage per processor = 11.0141 Mbytes
+    Step    Atoms         KinEng            CPU 
+  374001      500    0.020227022              0 
+  375601      500    0.020226694      1.7807234 
+Loop time of 1.78081 on 4 procs for 1600 steps with 500 atoms, finish time Mon Apr 22 01:37:07 2019
+
+
+Pair  time (%) = 0.0154543 (0.867825)
+Neigh time (%) = 0.249607 (14.0165)
+Comm  time (%) = 0.185173 (10.3982)
+Outpt time (%) = 3.68105e-05 (0.00206707)
+Other time (%) = 1.33054 (74.7154)
+
+Nlocal:    125 ave 500 max 0 min
+Histogram: 3 0 0 0 0 0 0 0 0 1
+Nghost:    58 ave 232 max 0 min
+Histogram: 3 0 0 0 0 0 0 0 0 1
+Neighs:    207.75 ave 831 max 0 min
+Histogram: 3 0 0 0 0 0 0 0 0 1
+
+Total # of neighbors = 831
+Ave neighs/atom = 1.662
+Neighbor list builds = 1600
+Dangerous builds = 0
+next b
+jump in.Launcher loop2
+variable b loop ${nLoop}
+variable b loop 25
+variable vz equal ${vmax}-(${vmax}/${nLoop}*v_b)
+variable vz equal 0.2-(${vmax}/${nLoop}*v_b)
+variable vz equal 0.2-(0.2/${nLoop}*v_b)
+variable vz equal 0.2-(0.2/25*v_b)
+print "A = ${vz}"
+A = 0.064
+run ${dvtimeStep}
+run 1600
+Setting up run at Mon Apr 22 01:37:07 2019
+
+Memory usage per processor = 11.0374 Mbytes
+    Step    Atoms         KinEng            CPU 
+  375601      500    0.020226694              0 
+  377201      500    0.020226365      1.8200585 
+Loop time of 1.82016 on 4 procs for 1600 steps with 500 atoms, finish time Mon Apr 22 01:37:09 2019
+
+
+Pair  time (%) = 0.0150349 (0.826025)
+Neigh time (%) = 0.251483 (13.8165)
+Comm  time (%) = 0.188209 (10.3402)
+Outpt time (%) = 0.00235947 (0.12963)
+Other time (%) = 1.36307 (74.8876)
+
+Nlocal:    125 ave 500 max 0 min
+Histogram: 3 0 0 0 0 0 0 0 0 1
+Nghost:    112.5 ave 450 max 0 min
+Histogram: 3 0 0 0 0 0 0 0 0 1
+Neighs:    205 ave 820 max 0 min
+Histogram: 3 0 0 0 0 0 0 0 0 1
+
+Total # of neighbors = 820
+Ave neighs/atom = 1.64
+Neighbor list builds = 1600
+Dangerous builds = 0
+next b
+jump in.Launcher loop2
+variable b loop ${nLoop}
+variable b loop 25
+variable vz equal ${vmax}-(${vmax}/${nLoop}*v_b)
+variable vz equal 0.2-(${vmax}/${nLoop}*v_b)
+variable vz equal 0.2-(0.2/${nLoop}*v_b)
+variable vz equal 0.2-(0.2/25*v_b)
+print "A = ${vz}"
+A = 0.056
+run ${dvtimeStep}
+run 1600
+Setting up run at Mon Apr 22 01:37:09 2019
+
+Memory usage per processor = 11.0901 Mbytes
+    Step    Atoms         KinEng            CPU 
+  377201      500    0.020226365              0 
+  378801      500    0.020226032      1.6660702 
+Loop time of 1.66617 on 4 procs for 1600 steps with 500 atoms, finish time Mon Apr 22 01:37:11 2019
+
+
+Pair  time (%) = 0.0162166 (0.973287)
+Neigh time (%) = 0.264811 (15.8934)
+Comm  time (%) = 0.159377 (9.56548)
+Outpt time (%) = 0.00228681 (0.13725)
+Other time (%) = 1.22348 (73.4306)
+
+Nlocal:    125 ave 272 max 0 min
+Histogram: 2 0 0 0 0 0 0 0 1 1
+Nghost:    112.5 ave 228 max 0 min
+Histogram: 2 0 0 0 0 0 0 0 0 2
+Neighs:    216 ave 465 max 0 min
+Histogram: 2 0 0 0 0 0 0 0 1 1
+
+Total # of neighbors = 864
+Ave neighs/atom = 1.728
+Neighbor list builds = 1600
+Dangerous builds = 0
+next b
+jump in.Launcher loop2
+variable b loop ${nLoop}
+variable b loop 25
+variable vz equal ${vmax}-(${vmax}/${nLoop}*v_b)
+variable vz equal 0.2-(${vmax}/${nLoop}*v_b)
+variable vz equal 0.2-(0.2/${nLoop}*v_b)
+variable vz equal 0.2-(0.2/25*v_b)
+print "A = ${vz}"
+A = 0.048
+run ${dvtimeStep}
+run 1600
+Setting up run at Mon Apr 22 01:37:11 2019
+
+Memory usage per processor = 11.0901 Mbytes
+    Step    Atoms         KinEng            CPU 
+  378801      500    0.020226032              0 
+  380401      500    0.020225702      1.4398198 
+Loop time of 1.43992 on 4 procs for 1600 steps with 500 atoms, finish time Mon Apr 22 01:37:12 2019
+
+
+Pair  time (%) = 0.0157166 (1.09149)
+Neigh time (%) = 0.282404 (19.6124)
+Comm  time (%) = 0.123281 (8.56165)
+Outpt time (%) = 0.0022389 (0.155488)
+Other time (%) = 1.01628 (70.5789)
+
+Nlocal:    125 ave 450 max 0 min
+Histogram: 2 1 0 0 0 0 0 0 0 1
+Nghost:    112.5 ave 450 max 0 min
+Histogram: 3 0 0 0 0 0 0 0 0 1
+Neighs:    198.75 ave 795 max 0 min
+Histogram: 3 0 0 0 0 0 0 0 0 1
+
+Total # of neighbors = 795
+Ave neighs/atom = 1.59
+Neighbor list builds = 1600
+Dangerous builds = 0
+next b
+jump in.Launcher loop2
+variable b loop ${nLoop}
+variable b loop 25
+variable vz equal ${vmax}-(${vmax}/${nLoop}*v_b)
+variable vz equal 0.2-(${vmax}/${nLoop}*v_b)
+variable vz equal 0.2-(0.2/${nLoop}*v_b)
+variable vz equal 0.2-(0.2/25*v_b)
+print "A = ${vz}"
+A = 0.04
+run ${dvtimeStep}
+run 1600
+Setting up run at Mon Apr 22 01:37:12 2019
+
+Memory usage per processor = 11.1343 Mbytes
+    Step    Atoms         KinEng            CPU 
+  380401      500    0.020225702              0 
+  382001      500    0.020225373      1.5901119 
+Loop time of 1.59021 on 4 procs for 1600 steps with 500 atoms, finish time Mon Apr 22 01:37:14 2019
+
+
+Pair  time (%) = 0.015305 (0.962452)
+Neigh time (%) = 0.26343 (16.5657)
+Comm  time (%) = 0.0988603 (6.2168)
+Outpt time (%) = 0.00288403 (0.181361)
+Other time (%) = 1.20973 (76.0737)
+
+Nlocal:    125 ave 450 max 0 min
+Histogram: 2 1 0 0 0 0 0 0 0 1
+Nghost:    55.75 ave 223 max 0 min
+Histogram: 3 0 0 0 0 0 0 0 0 1
+Neighs:    197 ave 788 max 0 min
+Histogram: 3 0 0 0 0 0 0 0 0 1
+
+Total # of neighbors = 788
+Ave neighs/atom = 1.576
+Neighbor list builds = 1600
+Dangerous builds = 0
+next b
+jump in.Launcher loop2
+variable b loop ${nLoop}
+variable b loop 25
+variable vz equal ${vmax}-(${vmax}/${nLoop}*v_b)
+variable vz equal 0.2-(${vmax}/${nLoop}*v_b)
+variable vz equal 0.2-(0.2/${nLoop}*v_b)
+variable vz equal 0.2-(0.2/25*v_b)
+print "A = ${vz}"
+A = 0.032
+run ${dvtimeStep}
+run 1600
+Setting up run at Mon Apr 22 01:37:14 2019
+
+Memory usage per processor = 11.1343 Mbytes
+    Step    Atoms         KinEng            CPU 
+  382001      500    0.020225373              0 
+  383601      500    0.020221427       1.583208 
+Loop time of 1.58325 on 4 procs for 1600 steps with 500 atoms, finish time Mon Apr 22 01:37:16 2019
+
+
+Pair  time (%) = 0.0149187 (0.942284)
+Neigh time (%) = 0.260523 (16.455)
+Comm  time (%) = 0.0922846 (5.82881)
+Outpt time (%) = 2.71452e-05 (0.00171453)
+Other time (%) = 1.2155 (76.7722)
+
+Nlocal:    125 ave 450 max 0 min
+Histogram: 2 1 0 0 0 0 0 0 0 1
+Nghost:    0 ave 0 max 0 min
+Histogram: 4 0 0 0 0 0 0 0 0 0
+Neighs:    196.5 ave 786 max 0 min
+Histogram: 3 0 0 0 0 0 0 0 0 1
+
+Total # of neighbors = 786
+Ave neighs/atom = 1.572
+Neighbor list builds = 1600
+Dangerous builds = 0
+next b
+jump in.Launcher loop2
+variable b loop ${nLoop}
+variable b loop 25
+variable vz equal ${vmax}-(${vmax}/${nLoop}*v_b)
+variable vz equal 0.2-(${vmax}/${nLoop}*v_b)
+variable vz equal 0.2-(0.2/${nLoop}*v_b)
+variable vz equal 0.2-(0.2/25*v_b)
+print "A = ${vz}"
+A = 0.024
+run ${dvtimeStep}
+run 1600
+Setting up run at Mon Apr 22 01:37:16 2019
+
+Memory usage per processor = 11.1343 Mbytes
+    Step    Atoms         KinEng            CPU 
+  383601      500    0.020221427              0 
+  385201      500    0.020221097      1.4977848 
+Loop time of 1.49793 on 4 procs for 1600 steps with 500 atoms, finish time Mon Apr 22 01:37:17 2019
+
+
+Pair  time (%) = 0.0143444 (0.957617)
+Neigh time (%) = 0.262354 (17.5145)
+Comm  time (%) = 0.056377 (3.76367)
+Outpt time (%) = 0.00221772 (0.148052)
+Other time (%) = 1.16263 (77.6162)
+
+Nlocal:    125 ave 450 max 0 min
+Histogram: 2 1 0 0 0 0 0 0 0 1
+Nghost:    0 ave 0 max 0 min
+Histogram: 4 0 0 0 0 0 0 0 0 0
+Neighs:    194.75 ave 779 max 0 min
+Histogram: 3 0 0 0 0 0 0 0 0 1
+
+Total # of neighbors = 779
+Ave neighs/atom = 1.558
+Neighbor list builds = 1600
+Dangerous builds = 0
+next b
+jump in.Launcher loop2
+variable b loop ${nLoop}
+variable b loop 25
+variable vz equal ${vmax}-(${vmax}/${nLoop}*v_b)
+variable vz equal 0.2-(${vmax}/${nLoop}*v_b)
+variable vz equal 0.2-(0.2/${nLoop}*v_b)
+variable vz equal 0.2-(0.2/25*v_b)
+print "A = ${vz}"
+A = 0.016
+run ${dvtimeStep}
+run 1600
+Setting up run at Mon Apr 22 01:37:17 2019
+
+Memory usage per processor = 11.1343 Mbytes
+    Step    Atoms         KinEng            CPU 
+  385201      500    0.020221097              0 
+  386801      500    0.020220766      1.4584042 
+Loop time of 1.45853 on 4 procs for 1600 steps with 500 atoms, finish time Mon Apr 22 01:37:19 2019
+
+
+Pair  time (%) = 0.0145403 (0.996913)
+Neigh time (%) = 0.249869 (17.1315)
+Comm  time (%) = 0.0586335 (4.02002)
+Outpt time (%) = 0.00223718 (0.153385)
+Other time (%) = 1.13326 (77.6982)
+
+Nlocal:    125 ave 450 max 0 min
+Histogram: 2 1 0 0 0 0 0 0 0 1
+Nghost:    0 ave 0 max 0 min
+Histogram: 4 0 0 0 0 0 0 0 0 0
+Neighs:    192.25 ave 769 max 0 min
+Histogram: 3 0 0 0 0 0 0 0 0 1
+
+Total # of neighbors = 769
+Ave neighs/atom = 1.538
+Neighbor list builds = 1600
+Dangerous builds = 0
+next b
+jump in.Launcher loop2
+variable b loop ${nLoop}
+variable b loop 25
+variable vz equal ${vmax}-(${vmax}/${nLoop}*v_b)
+variable vz equal 0.2-(${vmax}/${nLoop}*v_b)
+variable vz equal 0.2-(0.2/${nLoop}*v_b)
+variable vz equal 0.2-(0.2/25*v_b)
+print "A = ${vz}"
+A = 0.00800000000000001
+run ${dvtimeStep}
+run 1600
+Setting up run at Mon Apr 22 01:37:19 2019
+
+Memory usage per processor = 11.1343 Mbytes
+    Step    Atoms         KinEng            CPU 
+  386801      500    0.020220766              0 
+  388401      500    0.020220176      1.5007522 
+Loop time of 1.5009 on 4 procs for 1600 steps with 500 atoms, finish time Mon Apr 22 01:37:20 2019
+
+
+Pair  time (%) = 0.0143325 (0.954927)
+Neigh time (%) = 0.254766 (16.9742)
+Comm  time (%) = 0.0574956 (3.83074)
+Outpt time (%) = 0.0102086 (0.680161)
+Other time (%) = 1.1641 (77.56)
+
+Nlocal:    125 ave 450 max 0 min
+Histogram: 2 1 0 0 0 0 0 0 0 1
+Nghost:    0 ave 0 max 0 min
+Histogram: 4 0 0 0 0 0 0 0 0 0
+Neighs:    188.75 ave 754 max 0 min
+Histogram: 3 0 0 0 0 0 0 0 0 1
+
+Total # of neighbors = 755
+Ave neighs/atom = 1.51
+Neighbor list builds = 1600
+Dangerous builds = 0
+next b
+jump in.Launcher loop2
+variable b loop ${nLoop}
+variable b loop 25
+variable vz equal ${vmax}-(${vmax}/${nLoop}*v_b)
+variable vz equal 0.2-(${vmax}/${nLoop}*v_b)
+variable vz equal 0.2-(0.2/${nLoop}*v_b)
+variable vz equal 0.2-(0.2/25*v_b)
+print "A = ${vz}"
+A = 0
+run ${dvtimeStep}
+run 1600
+Setting up run at Mon Apr 22 01:37:20 2019
+
+Memory usage per processor = 11.1343 Mbytes
+    Step    Atoms         KinEng            CPU 
+  388401      500    0.020220176              0 
+  390001      500    0.020219841      1.4846892 
+Loop time of 1.48483 on 4 procs for 1600 steps with 500 atoms, finish time Mon Apr 22 01:37:22 2019
+
+
+Pair  time (%) = 0.0141606 (0.953688)
+Neigh time (%) = 0.257056 (17.3122)
+Comm  time (%) = 0.0570245 (3.84048)
+Outpt time (%) = 0.00226381 (0.152463)
+Other time (%) = 1.15432 (77.7412)
+
+Nlocal:    125 ave 450 max 0 min
+Histogram: 2 1 0 0 0 0 0 0 0 1
+Nghost:    0 ave 0 max 0 min
+Histogram: 4 0 0 0 0 0 0 0 0 0
+Neighs:    188.25 ave 752 max 0 min
+Histogram: 3 0 0 0 0 0 0 0 0 1
+
+Total # of neighbors = 753
+Ave neighs/atom = 1.506
+Neighbor list builds = 1600
+Dangerous builds = 0
+next b
+jump in.Launcher loop2
+variable vz equal 0.0
+
+run 100000
+Setting up run at Mon Apr 22 01:37:22 2019
+
+Memory usage per processor = 11.1343 Mbytes
+    Step    Atoms         KinEng            CPU 
+  390001      500    0.020219841              0 
+  490001      500     0.02008703      99.965441 
+Loop time of 99.9655 on 4 procs for 100000 steps with 500 atoms, finish time Mon Apr 22 01:39:01 2019
+
+
+Pair  time (%) = 0.828357 (0.828643)
+Neigh time (%) = 16.5436 (16.5493)
+Comm  time (%) = 4.45319 (4.45473)
+Outpt time (%) = 0.144724 (0.144774)
+Other time (%) = 77.9956 (78.0225)
+
+Nlocal:    125 ave 450 max 0 min
+Histogram: 2 1 0 0 0 0 0 0 0 1
+Nghost:    0 ave 0 max 0 min
+Histogram: 4 0 0 0 0 0 0 0 0 0
+Neighs:    121.75 ave 487 max 0 min
+Histogram: 3 0 0 0 0 0 0 0 0 1
+
+Total # of neighbors = 487
+Ave neighs/atom = 0.974
+Neighbor list builds = 100000
+Dangerous builds = 0

@@ -1,0 +1,102 @@
+### Plate Simulation
+### This simulation involves inserting a set of particles into a large box (the simulation domain),
+### allowing them to settle under the force of gravity, and then inserting a plate into this domain
+
+### Initialization
+
+units si
+atom_style sphere
+atom_modify map array
+boundary f f f
+newton off
+communicate single vel yes
+
+# processors * * *
+
+# Declare domain
+region domain block -0.5 0.5 -0.5 0.5 -1.0 0.5 units box
+create_box 2 domain
+
+# Neighbor listing
+neighbor 0.03 bin
+neigh_modify every 1 check no
+
+### Setup -------------------------------------------------------------------------------------------
+
+# Material and interaction properties required
+fix m1 all property/global youngsModulus peratomtype 1.0e7 1.0e7
+fix m2 all property/global poissonsRatio peratomtype 0.25 0.25
+fix m3 all property/global coefficientRestitution peratomtypepair 2 0.65 0.65 0.65 0.65
+fix m4 all property/global coefficientFriction peratomtypepair 2 0.2 0.175 0.175 0.5
+fix m5 all property/global cohesionEnergyDensity peratomtypepair 2 1 1 1 1
+
+# Particle insertion
+
+fix pts all particletemplate/sphere 15485863 atom_type 1 density constant 3110 radius constant 0.015
+fix pdd all particledistribution/discrete 15485867 1 pts 1.0
+region reservoir block -0.5 0.5 -0.5 0.5 -1.0 0.0 units box
+
+fix ins all insert/rate/region seed 32452843 distributiontemplate pdd &
+nparticles 15000 particlerate 15000 insert_every 1000 &
+overlapcheck yes vel constant 0. 0. 0. region reservoir ntry_mc 10000
+
+
+# Define the physics
+pair_style gran model hertz tangential history cohesion sjkr
+pair_coeff * *
+
+
+### Import CAD / Generate Solids --------------------------------------------------------------------
+
+fix cad1 all mesh/surface file simple_plate.STL type 2 move 0 0 0
+
+
+# Use the imported mesh as granular wall
+fix geometry all wall/gran model hertz tangential history mesh n_meshes 1 meshes cad1
+
+
+### Detailed Settings -------------------------------------------------------------------------------
+
+# Integrator
+fix integrator all nve/sphere
+
+# Gravity
+fix grav all gravity 9.81 vector 0.0 0.0 -1.0
+
+# Time step
+timestep 0.0001
+
+### Thermodynamic output settings
+# none
+
+# Check time step and initialize dump file
+fix ctg all check/timestep/gran 1 0.01 0.01
+run 1
+unfix ctg
+
+#Create imaging information
+
+dump dumpstl all stl 2000 post/dump*.stl
+
+dump dmp all custom/vtk 2000 post/plate_*.vtk id type type x y z ix iy iz vx vy vz fx fy fz omegax omegay omegaz radius 
+
+# Run simulation for N time steps
+
+# Allow Particles to settle
+run 15000
+
+
+# Move scoop into regolith surface
+fix moveCad all move/mesh mesh cad1 linear 0 0 -0.6
+
+run 10000
+
+# Move scoop into regolith surface
+fix moveCad all move/mesh mesh cad1 linear 0 0 -0.2
+
+run 10000
+
+# Stop CAD motion
+unfix moveCad
+
+run 1000

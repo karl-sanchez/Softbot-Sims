@@ -1,0 +1,227 @@
+LIGGGHTS (Version LIGGGHTS-PUBLIC 3.8.0, compiled 2018-12-24-10:52:11 by karl, git commit 28301df8853491784b1d8b90533ea89b8c6af1e8)
+### Launcher Simulation
+### This simulation involves inserting a set of particles into a bucket,
+### allowing them to settle under the force of gravity, and then accelerating
+
+
+### Variables
+variable nP equal 150000
+variable tStep equal 1.0e-4
+variable tSettle equal 150000
+variable vmax equal 0.02
+variable accel equal 0.01
+variable rcyl equal 0.3
+### Initialization
+
+units si
+atom_style sphere
+atom_modify map array
+boundary f f f
+newton off
+communicate single vel yes
+
+# Declare domain
+# region domain block -0.5 0.5 -0.5 0.5 -1.0 0.5 units box
+region domain cylinder z 0 0 0.3 -1 0.5 units box
+
+create_box 2 domain
+Created orthogonal box = (-0.3 -0.3 -1) to (0.3 0.3 0.5)
+  1 by 1 by 4 MPI processor grid
+
+# Neighbor listing
+neighbor 0.01 bin
+neigh_modify every 1 check no delay 0
+
+### Setup -------------------------------------------------------------------------------------------
+
+# Material and interaction properties required
+fix m1 all property/global youngsModulus peratomtype 1.0e7 1.0e7
+fix m2 all property/global poissonsRatio peratomtype 0.25 0.25
+fix m3 all property/global coefficientRestitution peratomtypepair 2 0.65 0.65 0.65 0.65
+fix m4 all property/global coefficientFriction peratomtypepair 2 1 1 1 1
+fix m5 all property/global cohesionEnergyDensity peratomtypepair 2 50 0 0 50
+fix m6 all property/global coefficientRollingFriction peratomtypepair 2 0.04 0.04 0.04 0.04
+
+# Particle insertion
+
+fix pts1 all particletemplate/sphere 49979693 atom_type 1 density constant 3110 radius constant 0.005
+fix pts2 all particletemplate/sphere 15485863 atom_type 1 density constant 3110 radius constant 0.01
+fix pts3 all particletemplate/sphere 15485867 atom_type 1 density constant 3110 radius constant 0.03
+fix pts4 all particletemplate/sphere 67867967 atom_type 1 density constant 3110 radius constant 0.05
+fix pdd all particledistribution/discrete 32452843 4 pts1 0.60 pts2 0.25 pts3 0.1 pts4 0.05
+
+
+# region reservoir block -0.5 0.5 -0.5 0.5 -1.0 0.0 units box
+region reservoir cylinder z 0 0 ${rcyl} -1 0 units box
+region reservoir cylinder z 0 0 0.3 -1 0 units box
+
+fix ins all insert/rate/region seed 49979687 distributiontemplate pdd nparticles ${nP} particlerate 15000 insert_every 1000 overlapcheck yes vel constant 0. 0. 0. region reservoir ntry_mc 10000
+fix ins all insert/rate/region seed 49979687 distributiontemplate pdd nparticles 150000 particlerate 15000 insert_every 1000 overlapcheck yes vel constant 0. 0. 0. region reservoir ntry_mc 10000
+
+
+# Define the physics
+pair_style gran model hertz tangential history cohesion sjkr rolling_friction cdt
+WARNING: 
+	The contact model you specified is not located in any whitelist.
+	Because of this the model will be run in an unoptimized version (increasing runtime by up to 20%).
+	In order to optimize this model you have the following options:
+		(i)  Run the genAutoExamplesWhitelist.sh script in your LIGGGHTS(R) source folder to automatically parse the input script
+		(ii) Add the model combination by hand to your style_contact_model_user.whitelist that can be found in your LIGGGHTS(R) source folder
+	If you perform one of the steps above LIGGGHTS(R) needs to be recompiled to generate the optimized code.
+
+ (../contact_models.h:364)
+pair_coeff * *
+
+
+### Import CAD / Generate Solids --------------------------------------------------------------------
+
+fix cad1 all mesh/surface/stress file simple_plate.STL type 2 move 0 0 0 stress on
+
+
+# Use the imported mesh as granular wall
+fix geometry all wall/gran model hertz tangential history mesh n_meshes 1 meshes cad1
+
+
+variable time equal step*dt
+variable fx equal f_cad1[1]
+variable fy equal f_cad1[2]
+variable fz equal f_cad1[3]
+variable Mx equal f_cad1[4]
+variable My equal f_cad1[5]
+variable Mz equal f_cad1[6]
+
+
+# Add a granular wall at the floor of the bounding box too
+fix zwalls all wall/gran model hertz tangential history primitive type 1 zplane -1.0
+#fix xwalls1 all wall/gran model hertz tangential history primitive type 1 xplane -0.5
+#fix xwalls2 all wall/gran model hertz tangential history primitive type 1 xplane 0.5
+#fix ywalls1 all wall/gran model hertz tangential history primitive type 1 yplane -0.5
+#fix ywalls2 all wall/gran model hertz tangential history primitive type 1 yplane 0.5
+
+fix cylwall all wall/gran model hertz tangential history primitive type 1 zcylinder ${rcyl} 0 0
+fix cylwall all wall/gran model hertz tangential history primitive type 1 zcylinder 0.3 0 0
+
+### Detailed Settings -------------------------------------------------------------------------------
+
+# Integrator
+fix integrator all nve/sphere
+
+# Gravity
+fix grav all gravity 9.81 vector 0.0 0.0 -1.0
+
+# Time step
+timestep ${tStep}
+timestep 0.0001
+
+### Thermodynamic output settings
+# none
+
+# Check time step and initialize dump file
+fix ctg all check/timestep/gran 1 0.01 0.01
+run 1
+Setting up run at Mon Apr 22 15:52:15 2019
+
+INFO: Particle insertion ins: 1500.000000 particles every 1000 steps - particle rate 15000.000000, (mass rate 3.866305e+01)
+      150000 particles (mass 3.866305e+02) within 100000 steps
+Memory usage per processor = 6.71991 Mbytes
+    Step    Atoms         KinEng            CPU 
+       0        0              0              0 
+INFO: Particle insertion ins: inserted 1500 particle templates (mass 8.154988e+00) at step 1
+ - a total of 1500 particle templates (mass 8.154988e+00) inserted so far.
+WARNING: time-step is 20.944829 % of rayleigh time (../fix_check_timestep_gran.cpp:200)
+WARNING: time-step is 10.596476 % of hertz time (../fix_check_timestep_gran.cpp:208)
+       1     1500     0.29533752    0.004175043 
+Loop time of 0.00421728 on 4 procs for 1 steps with 1500 atoms, finish time Mon Apr 22 15:52:15 2019
+
+
+Pair  time (%) = 1.0528e-05 (0.249639)
+Neigh time (%) = 0.000691731 (16.4023)
+Comm  time (%) = 0.000251583 (5.96552)
+Outpt time (%) = 9.89425e-05 (2.34612)
+Other time (%) = 0.0031645 (75.0364)
+
+Nlocal:    375 ave 572 max 0 min
+Histogram: 1 0 0 0 0 0 1 0 0 2
+Nghost:    87.75 ave 174 max 0 min
+Histogram: 1 0 0 0 0 2 0 0 0 1
+Neighs:    27.5 ave 48 max 0 min
+Histogram: 1 0 0 1 0 0 0 0 0 2
+
+Total # of neighbors = 110
+Ave neighs/atom = 0.0733333
+Neighbor list builds = 1
+Dangerous builds = 0
+unfix ctg
+
+# Dump Files for Post-Processing --------------------------------------------------------------------
+
+dump dumpstl all stl 2000 post/cad_*.stl
+dump dmp all custom/vtk 2000 post/plate_*.vtk id type type x y z ix iy iz vx vy vz fx fy fz omegax omegay omegaz radius
+dump forces1 all mesh/vtk 2000 post/stress_*.vtk output interpolate stress stresscomponents cad1
+
+fix forceslog all print 200 "${time},${fx},${fy},${fz},${Mx},${My},${Mz}" file post/forces.csv title "t,Fx,Fy,Fz,Mx,My,Mz" screen no
+
+
+# Run simulation for N time steps ------------------------------------------------------------------
+
+# Allow Particles to settle
+run ${tSettle}
+run 150000
+Setting up run at Mon Apr 22 15:52:15 2019
+
+Memory usage per processor = 10.0659 Mbytes
+    Step    Atoms         KinEng            CPU 
+       1     1500     0.29533752              0 
+INFO: Particle insertion ins: inserted 1500 particle templates (mass 3.297494e+00) at step 1001
+ - a total of 3000 particle templates (mass 1.145248e+01) inserted so far.
+INFO: Particle insertion ins: inserted 1500 particle templates (mass 3.624801e+00) at step 2001
+ - a total of 4500 particle templates (mass 1.507728e+01) inserted so far.
+INFO: Particle insertion ins: inserted 1500 particle templates (mass 3.658997e+00) at step 3001
+ - a total of 6000 particle templates (mass 1.873628e+01) inserted so far.
+INFO: Particle insertion ins: inserted 1500 particle templates (mass 3.308893e+00) at step 4001
+ - a total of 7500 particle templates (mass 2.204517e+01) inserted so far.
+INFO: Particle insertion ins: inserted 1500 particle templates (mass 3.297494e+00) at step 5001
+ - a total of 9000 particle templates (mass 2.534267e+01) inserted so far.
+INFO: Particle insertion ins: inserted 1500 particle templates (mass 3.647599e+00) at step 6001
+ - a total of 10500 particle templates (mass 2.899027e+01) inserted so far.
+INFO: Particle insertion ins: inserted 1500 particle templates (mass 3.297494e+00) at step 7001
+ - a total of 12000 particle templates (mass 3.228776e+01) inserted so far.
+INFO: Particle insertion ins: inserted 1500 particle templates (mass 3.974905e+00) at step 8001
+ - a total of 13500 particle templates (mass 3.626267e+01) inserted so far.
+INFO: Particle insertion ins: inserted 1500 particle templates (mass 3.647599e+00) at step 9001
+ - a total of 15000 particle templates (mass 3.991026e+01) inserted so far.
+INFO: Particle insertion ins: inserted 1500 particle templates (mass 3.647599e+00) at step 10001
+ - a total of 16500 particle templates (mass 4.355786e+01) inserted so far.
+INFO: Particle insertion ins: inserted 928 particle templates (mass 2.024091e+00) at step 11001
+ - a total of 17428 particle templates (mass 4.558195e+01) inserted so far.
+WARNING: Particle insertion: Less insertions than requested (../fix_insert.cpp:814)
+INFO: Particle insertion ins: inserted 1500 particle templates (mass 3.636200e+00) at step 12001
+ - a total of 18928 particle templates (mass 4.921815e+01) inserted so far.
+INFO: Particle insertion ins: inserted 1500 particle templates (mass 3.286095e+00) at step 13001
+ - a total of 20428 particle templates (mass 5.250425e+01) inserted so far.
+INFO: Particle insertion ins: inserted 1500 particle templates (mass 3.624801e+00) at step 14001
+ - a total of 21928 particle templates (mass 5.612905e+01) inserted so far.
+INFO: Particle insertion ins: inserted 1500 particle templates (mass 3.624801e+00) at step 15001
+ - a total of 23428 particle templates (mass 5.975385e+01) inserted so far.
+WARNING: Forced restart written (../output.cpp:427)
+   15575    23423      29.451292      2165.6051 
+Loop time of 2165.61 on 4 procs for 150000 steps with 23423 atoms, finish time Mon Apr 22 16:28:21 2019
+
+
+Pair  time (%) = 24.6552 (1.13849)
+Neigh time (%) = 524.141 (24.203)
+Comm  time (%) = 531.875 (24.5601)
+Outpt time (%) = 0.209436 (0.009671)
+Other time (%) = 1084.72 (50.0887)
+
+Nlocal:    5855.75 ave 21273 max 4 min
+Histogram: 3 0 0 0 0 0 0 0 0 1
+Nghost:    267.75 ave 548 max 1 min
+Histogram: 1 0 0 1 0 1 0 0 0 1
+Neighs:    69043 ave 275664 max 0 min
+Histogram: 3 0 0 0 0 0 0 0 0 1
+
+Total # of neighbors = 276172
+Ave neighs/atom = 11.7906
+Neighbor list builds = 15574
+Dangerous builds = 0
