@@ -1,0 +1,546 @@
+LIGGGHTS (Version LIGGGHTS-PUBLIC 3.8.0, compiled 2018-12-24-10:52:11 by karl, git commit 28301df8853491784b1d8b90533ea89b8c6af1e8)
+########################################
+# Example 3, Flow through a funnel     #
+#  (c) 2018 by C. Richter, OVGU/ILM    #
+#             www.ilm.ovgu.de          #
+########################################
+
+#This tutorial gives a short overview about
+#-different material types for walls and particles
+#-using variables
+#-inserting a particle distribution
+#-force measurement
+#-moving walls
+#-cohesive material
+#-restart simulation from previous step
+
+#LIGGGHTS>=3.5.0 needs large primes for random function
+include PRIMES.inc
+variable prime1 equal 15485863
+variable prime2 equal 15486041
+variable prime3 equal 15486209
+variable prime4 equal 15486347
+variable prime5 equal 15486517
+variable prime6 equal 15486719
+variable prime7 equal 15486833
+variable prime8 equal 15486953
+variable prime9 equal 15487097
+variable prime10 equal 15487291
+variable prime11 equal 15487469
+variable prime12 equal 15487639
+variable prime13 equal 15487861
+variable prime14 equal 15487973
+variable prime15 equal 15488113
+variable prime16 equal 15488279
+variable prime17 equal 15488497
+variable prime18 equal 15488651
+variable prime19 equal 15488789
+variable prime20 equal 15488953
+variable prime21 equal 15485867
+variable prime22 equal 15486047
+variable prime23 equal 15486221
+variable prime24 equal 15486421
+variable prime25 equal 15486533
+variable prime26 equal 15486727
+variable prime27 equal 15486857
+variable prime28 equal 15486967
+variable prime29 equal 15487103
+variable prime30 equal 15487309
+variable prime31 equal 15487471
+variable prime32 equal 15487649
+variable prime33 equal 15487889
+variable prime34 equal 15487981
+variable prime35 equal 15488129
+variable prime36 equal 15488293
+variable prime37 equal 15488509
+variable prime38 equal 15488657
+variable prime39 equal 15488801
+variable prime40 equal 15488981
+variable prime41 equal 15485917
+variable prime42 equal 15486059
+variable prime43 equal 15486227
+variable prime44 equal 15486433
+variable prime45 equal 15486557
+variable prime46 equal 15486739
+variable prime47 equal 15486869
+variable prime48 equal 15486997
+variable prime49 equal 15487139
+variable prime50 equal 15487313
+variable prime51 equal 15487517
+variable prime52 equal 15487721
+variable prime53 equal 15487897
+variable prime54 equal 15487991
+variable prime55 equal 15488141
+variable prime56 equal 15488321
+variable prime57 equal 15488527
+variable prime58 equal 15488659
+variable prime59 equal 15488807
+variable prime60 equal 15488983
+variable prime61 equal 15485927
+variable prime62 equal 15486071
+variable prime63 equal 15486241
+variable prime64 equal 15486437
+variable prime65 equal 15486571
+variable prime66 equal 15486749
+variable prime67 equal 15486871
+variable prime68 equal 15487001
+variable prime69 equal 15487151
+variable prime70 equal 15487319
+variable prime71 equal 15487531
+variable prime72 equal 15487733
+variable prime73 equal 15487903
+variable prime74 equal 15488009
+variable prime75 equal 15488147
+variable prime76 equal 15488383
+variable prime77 equal 15488531
+variable prime78 equal 15488677
+variable prime79 equal 15488827
+variable prime80 equal 15489013
+
+#constants
+variable cor equal 0.2				#Coefficient of Restitution
+variable timestep  equal 1.25e-5
+variable wallfric equal 0.59	    #Particle-Wall-Friction
+variable ff equal 0.35				#factor of particle-particle friction
+variable frf equal 0.35             #factor of rolling friction
+variable CED equal 150000		    #cohesion energy density
+
+variable youngmod equal 1e7
+variable poiss equal 0.3
+
+#sample particle distribution, all dimensions in meters
+variable r1 equal 0.0220
+variable r2 equal 0.0230
+variable r3 equal 0.0240
+variable r4 equal 0.0250
+variable r5 equal 0.0260
+variable r6 equal 0.0270
+variable r7 equal 0.0280
+
+variable frac1 equal 0.013
+variable frac2 equal 0.015
+variable frac3 equal 0.049
+variable frac4 equal 0.105
+variable frac5 equal 0.05
+variable frac6 equal 0.098
+variable frac7 equal 0.067
+
+variable 	dens equal 1434.037202 #material density
+
+variable	N equal 3000		   #Number of particles to generate
+variable    instime equal 0.625	   #[s] to insert all particles
+
+########## Standard block #############
+atom_style	granular
+boundary	f f f
+newton		off
+communicate	single vel yes
+units		si
+######################################
+
+#simulation region
+region		reg block -0.541 0.541 -0.541 0.541 -1.10 1.10 units box
+create_box	2 reg
+Created orthogonal box = (-0.541 -0.541 -1.1) to (0.541 0.541 1.1)
+  1 by 1 by 4 MPI processor grid
+
+neighbor	0.005 bin    #additional neighbor cutoff distance (cutoff=D_max+skin)
+neigh_modify	delay 0
+
+#Material properties 1=particle, 2=wall
+fix 		m1 all property/global youngsModulus peratomtype ${youngmod} ${youngmod}
+fix 		m1 all property/global youngsModulus peratomtype 10000000 ${youngmod}
+fix 		m1 all property/global youngsModulus peratomtype 10000000 10000000
+fix 		m2 all property/global poissonsRatio peratomtype ${poiss} ${poiss}
+fix 		m2 all property/global poissonsRatio peratomtype 0.3 ${poiss}
+fix 		m2 all property/global poissonsRatio peratomtype 0.3 0.3
+fix 		m3 all property/global coefficientRestitution peratomtypepair 2 ${cor} ${cor} 																			${cor} ${cor}
+fix 		m3 all property/global coefficientRestitution peratomtypepair 2 0.2 ${cor} 																			${cor} ${cor}
+fix 		m3 all property/global coefficientRestitution peratomtypepair 2 0.2 0.2 																			${cor} ${cor}
+fix 		m3 all property/global coefficientRestitution peratomtypepair 2 0.2 0.2 																			0.2 ${cor}
+fix 		m3 all property/global coefficientRestitution peratomtypepair 2 0.2 0.2 																			0.2 0.2
+fix 		m4 all property/global coefficientFriction peratomtypepair 2 ${ff} ${wallfric} ${wallfric} ${wallfric}
+fix 		m4 all property/global coefficientFriction peratomtypepair 2 0.35 ${wallfric} ${wallfric} ${wallfric}
+fix 		m4 all property/global coefficientFriction peratomtypepair 2 0.35 0.59 ${wallfric} ${wallfric}
+fix 		m4 all property/global coefficientFriction peratomtypepair 2 0.35 0.59 0.59 ${wallfric}
+fix 		m4 all property/global coefficientFriction peratomtypepair 2 0.35 0.59 0.59 0.59
+fix 		m5 all property/global coefficientRollingFriction peratomtypepair 2 ${frf} ${frf} ${frf} ${frf}
+fix 		m5 all property/global coefficientRollingFriction peratomtypepair 2 0.35 ${frf} ${frf} ${frf}
+fix 		m5 all property/global coefficientRollingFriction peratomtypepair 2 0.35 0.35 ${frf} ${frf}
+fix 		m5 all property/global coefficientRollingFriction peratomtypepair 2 0.35 0.35 0.35 ${frf}
+fix 		m5 all property/global coefficientRollingFriction peratomtypepair 2 0.35 0.35 0.35 0.35
+fix 		m6 all property/global cohesionEnergyDensity peratomtypepair 2 ${CED} 0 0 0
+fix 		m6 all property/global cohesionEnergyDensity peratomtypepair 2 150000 0 0 0
+
+#pair style
+pair_style 	gran model hertz tangential history cohesion sjkr2 rolling_friction epsd2 #hertz-mindlin law with cohesion and rolling friction
+WARNING: 
+	The contact model you specified is not located in any whitelist.
+	Because of this the model will be run in an unoptimized version (increasing runtime by up to 20%).
+	In order to optimize this model you have the following options:
+		(i)  Run the genAutoExamplesWhitelist.sh script in your LIGGGHTS(R) source folder to automatically parse the input script
+		(ii) Add the model combination by hand to your style_contact_model_user.whitelist that can be found in your LIGGGHTS(R) source folder
+	If you perform one of the steps above LIGGGHTS(R) needs to be recompiled to generate the optimized code.
+
+ (../contact_models.h:364)
+pair_coeff	* *
+
+timestep	${timestep}
+timestep	1.25e-05
+
+fix		1 all nve/sphere						#integrator
+fix		2 all gravity 9.81 vector 0.0 0.0 -1.0  #gravity
+
+#import mesh from cad:
+fix		behaelter all mesh/surface file STL/behaelter.stl heal auto_remove_duplicates type 2 scale 0.001
+fix		schieber1 all mesh/surface file STL/schieber1.stl type 2 scale 0.001
+fix		schieber2 all mesh/surface file STL/schieber2.stl type 2 scale 0.001
+fix		messflaeche all mesh/surface/stress file STL/messflaeche.stl type 2 scale 0.001 stress on #store stress for every mesh-triangle
+
+#use the imported mesh as granular wall
+fix		walls all wall/gran model hertz tangential history rolling_friction epsd2 mesh n_meshes 4 meshes behaelter schieber1 schieber2 messflaeche
+WARNING: 
+	The contact model you specified is not located in any whitelist.
+	Because of this the model will be run in an unoptimized version (increasing runtime by up to 20%).
+	In order to optimize this model you have the following options:
+		(i)  Run the genAutoExamplesWhitelist.sh script in your LIGGGHTS(R) source folder to automatically parse the input script
+		(ii) Add the model combination by hand to your style_contact_model_user.whitelist that can be found in your LIGGGHTS(R) source folder
+	If you perform one of the steps above LIGGGHTS(R) needs to be recompiled to generate the optimized code.
+
+ (../contact_models.h:364)
+
+#region and insertion
+fix		pts1 all particletemplate/sphere ${prime1} atom_type 1 density constant ${dens} radius constant ${r1}
+fix		pts1 all particletemplate/sphere 15485863 atom_type 1 density constant ${dens} radius constant ${r1}
+fix		pts1 all particletemplate/sphere 15485863 atom_type 1 density constant 1434.037202 radius constant ${r1}
+fix		pts1 all particletemplate/sphere 15485863 atom_type 1 density constant 1434.037202 radius constant 0.022
+fix		pts2 all particletemplate/sphere ${prime2} atom_type 1 density constant ${dens} radius constant ${r2}
+fix		pts2 all particletemplate/sphere 15486041 atom_type 1 density constant ${dens} radius constant ${r2}
+fix		pts2 all particletemplate/sphere 15486041 atom_type 1 density constant 1434.037202 radius constant ${r2}
+fix		pts2 all particletemplate/sphere 15486041 atom_type 1 density constant 1434.037202 radius constant 0.023
+fix		pts3 all particletemplate/sphere ${prime3} atom_type 1 density constant ${dens} radius constant ${r3}
+fix		pts3 all particletemplate/sphere 15486209 atom_type 1 density constant ${dens} radius constant ${r3}
+fix		pts3 all particletemplate/sphere 15486209 atom_type 1 density constant 1434.037202 radius constant ${r3}
+fix		pts3 all particletemplate/sphere 15486209 atom_type 1 density constant 1434.037202 radius constant 0.024
+fix		pts4 all particletemplate/sphere ${prime4} atom_type 1 density constant ${dens} radius constant ${r4}
+fix		pts4 all particletemplate/sphere 15486347 atom_type 1 density constant ${dens} radius constant ${r4}
+fix		pts4 all particletemplate/sphere 15486347 atom_type 1 density constant 1434.037202 radius constant ${r4}
+fix		pts4 all particletemplate/sphere 15486347 atom_type 1 density constant 1434.037202 radius constant 0.025
+fix		pts5 all particletemplate/sphere ${prime5} atom_type 1 density constant ${dens} radius constant ${r5}
+fix		pts5 all particletemplate/sphere 15486517 atom_type 1 density constant ${dens} radius constant ${r5}
+fix		pts5 all particletemplate/sphere 15486517 atom_type 1 density constant 1434.037202 radius constant ${r5}
+fix		pts5 all particletemplate/sphere 15486517 atom_type 1 density constant 1434.037202 radius constant 0.026
+fix		pts6 all particletemplate/sphere ${prime6} atom_type 1 density constant ${dens} radius constant ${r6}
+fix		pts6 all particletemplate/sphere 15486719 atom_type 1 density constant ${dens} radius constant ${r6}
+fix		pts6 all particletemplate/sphere 15486719 atom_type 1 density constant 1434.037202 radius constant ${r6}
+fix		pts6 all particletemplate/sphere 15486719 atom_type 1 density constant 1434.037202 radius constant 0.027
+fix		pts7 all particletemplate/sphere ${prime7} atom_type 1 density constant ${dens} radius constant ${r7}
+fix		pts7 all particletemplate/sphere 15486833 atom_type 1 density constant ${dens} radius constant ${r7}
+fix		pts7 all particletemplate/sphere 15486833 atom_type 1 density constant 1434.037202 radius constant ${r7}
+fix		pts7 all particletemplate/sphere 15486833 atom_type 1 density constant 1434.037202 radius constant 0.028
+
+fix		pdd1 all particledistribution/discrete ${prime8} 7 pts1 ${frac1} pts2 ${frac2} pts3 ${frac3} pts4 ${frac4} pts5 ${frac5} pts6 ${frac6} pts7 ${frac7}
+fix		pdd1 all particledistribution/discrete 15486953 7 pts1 ${frac1} pts2 ${frac2} pts3 ${frac3} pts4 ${frac4} pts5 ${frac5} pts6 ${frac6} pts7 ${frac7}
+fix		pdd1 all particledistribution/discrete 15486953 7 pts1 0.013 pts2 ${frac2} pts3 ${frac3} pts4 ${frac4} pts5 ${frac5} pts6 ${frac6} pts7 ${frac7}
+fix		pdd1 all particledistribution/discrete 15486953 7 pts1 0.013 pts2 0.015 pts3 ${frac3} pts4 ${frac4} pts5 ${frac5} pts6 ${frac6} pts7 ${frac7}
+fix		pdd1 all particledistribution/discrete 15486953 7 pts1 0.013 pts2 0.015 pts3 0.049 pts4 ${frac4} pts5 ${frac5} pts6 ${frac6} pts7 ${frac7}
+fix		pdd1 all particledistribution/discrete 15486953 7 pts1 0.013 pts2 0.015 pts3 0.049 pts4 0.105 pts5 ${frac5} pts6 ${frac6} pts7 ${frac7}
+fix		pdd1 all particledistribution/discrete 15486953 7 pts1 0.013 pts2 0.015 pts3 0.049 pts4 0.105 pts5 0.05 pts6 ${frac6} pts7 ${frac7}
+fix		pdd1 all particledistribution/discrete 15486953 7 pts1 0.013 pts2 0.015 pts3 0.049 pts4 0.105 pts5 0.05 pts6 0.098 pts7 ${frac7}
+fix		pdd1 all particledistribution/discrete 15486953 7 pts1 0.013 pts2 0.015 pts3 0.049 pts4 0.105 pts5 0.05 pts6 0.098 pts7 0.067
+WARNING: particledistribution/discrete: sum of distribution weights != 1, normalizing distribution (../fix_particledistribution_discrete.cpp:135)
+
+variable rate equal $N/${instime}
+variable rate equal 3000/${instime}
+variable rate equal 3000/0.625
+
+region		gen block -0.5 0.5 -0.5 0.5 1.07 1.10 units box
+fix			ins all	insert/rate/region seed ${prime9} distributiontemplate pdd1 nparticles $N particlerate ${rate} insert_every 1000 overlapcheck yes verbose no vel constant 0 0 -2 region gen
+fix			ins all	insert/rate/region seed 15487097 distributiontemplate pdd1 nparticles $N particlerate ${rate} insert_every 1000 overlapcheck yes verbose no vel constant 0 0 -2 region gen
+fix			ins all	insert/rate/region seed 15487097 distributiontemplate pdd1 nparticles 3000 particlerate ${rate} insert_every 1000 overlapcheck yes verbose no vel constant 0 0 -2 region gen
+fix			ins all	insert/rate/region seed 15487097 distributiontemplate pdd1 nparticles 3000 particlerate 4800 insert_every 1000 overlapcheck yes verbose no vel constant 0 0 -2 region gen
+
+#thermo settings
+thermo_style	custom step atoms spcpu
+thermo		1000
+thermo_modify	lost ignore norm no
+
+#get total force and torque of mesh "messflaeche"
+variable time equal step*dt
+variable fx equal f_messflaeche[1]
+variable fy equal f_messflaeche[2]
+variable fz equal f_messflaeche[3]
+variable Mx equal f_messflaeche[4]
+variable My equal f_messflaeche[5]
+variable Mz equal f_messflaeche[6]
+
+#make a dump of particles, mesh and forces
+dump	dmp 	all custom	1000 post/dump*.liggghts id type x y z vx vy vz fx fy fz radius mass
+dump 	dumpstl all mesh/stl	1000 post/dump*.stl behaelter schieber1 schieber2
+dump	forces1	all mesh/vtk	1000 post/dump_int*.vtk output interpolate stress stresscomponents messflaeche
+dump	forces2	all mesh/vtk	1000 post/dump_face*.vtk output face stress stresscomponents messflaeche
+fix 	forceslog all print 	 100 "${time},${fx},${fy},${fz},${Mx},${My},${Mz}" file post/forces.csv title "t,Fx,Fy,Fz,Mx,My,Mz" screen no
+
+#run with particle insertion
+variable inssteps equal ${instime}/dt
+variable inssteps equal 0.625/dt
+run		${inssteps} upto
+run		50000 upto
+Setting up run at Sun Apr 21 22:35:12 2019
+
+INFO: Particle insertion ins: 60.000000 particles every 1000 steps - particle rate 4800.000000, (mass rate 4.851513e+02)
+      3000 particles (mass 3.032196e+02) within 50000 steps
+Memory usage per processor = 16.7672 Mbytes
+    Step    Atoms          S/CPU 
+       0        0              0 
+    1000       60      5129.1166 
+    2000      120      5420.5292 
+    3000      180      5203.3621 
+    4000      240      4676.3685 
+    5000      300       4661.216 
+    6000      360      4385.7634 
+    7000      420      3739.2691 
+    8000      480      3808.3212 
+    9000      540      3623.2429 
+   10000      600      3401.6872 
+   11000      660      3180.9761 
+   12000      720      3007.0151 
+   13000      780      2997.2078 
+   14000      840       2687.435 
+   15000      900      2323.1715 
+   16000      960      2300.0028 
+   17000     1020      2183.5264 
+   18000     1080       2128.644 
+   19000     1140      2092.9979 
+   20000     1200      2024.7343 
+   21000     1260      1882.3905 
+   22000     1320       1659.569 
+   23000     1380      1476.4734 
+   24000     1440      1302.8903 
+   25000     1500      1150.7614 
+   26000     1560      1007.6866 
+   27000     1620      959.41668 
+   28000     1680       836.3642 
+   29000     1740      779.99709 
+   30000     1800      705.31238 
+   31000     1860      656.24878 
+   32000     1920      608.16015 
+   33000     1980      629.13014 
+   34000     2040      586.27259 
+   35000     2100      555.64225 
+   36000     2160      534.07667 
+   37000     2220      510.89154 
+   38000     2280      487.59135 
+   39000     2340      476.02624 
+   40000     2400      431.14639 
+   41000     2460      374.19592 
+   42000     2520      412.19714 
+   43000     2580      429.70984 
+   44000     2640      425.15729 
+   45000     2700      414.31023 
+   46000     2760      382.37067 
+   47000     2820       382.1245 
+   48000     2880      379.50488 
+   49000     2940      331.73774 
+   50000     3000      294.01786 
+Loop time of 60.8626 on 4 procs for 50000 steps with 3000 atoms, finish time Sun Apr 21 22:36:13 2019
+
+
+Pair  time (%) = 7.71416 (12.6747)
+Neigh time (%) = 0.472579 (0.776468)
+Comm  time (%) = 4.13122 (6.78778)
+Outpt time (%) = 2.03096 (3.33695)
+Other time (%) = 46.5137 (76.4241)
+
+Nlocal:    750 ave 1517 max 0 min
+Histogram: 2 0 0 0 0 0 0 0 0 2
+Nghost:    169.5 ave 349 max 0 min
+Histogram: 2 0 0 0 0 0 0 0 1 1
+Neighs:    1416.25 ave 3463 max 0 min
+Histogram: 2 0 0 0 0 1 0 0 0 1
+
+Total # of neighbors = 5665
+Ave neighs/atom = 1.88833
+Neighbor list builds = 1003
+Dangerous builds = 0
+unfix	ins						#do not insert after this line
+write_restart insert.restart	#to start over here with different setup
+
+variable opentime  equal 0.1 			#open in 0.1sek
+variable opensteps equal ${opentime}/dt #number of steps needed
+variable opensteps equal 0.1/dt 
+variable w   equal (PI/4)/${opentime}   #w=df/dt
+variable w   equal (PI/4)/0.1   
+variable T   equal 2*PI/${w}            #T=1/f=2pi/w
+variable T   equal 2*PI/7.85398163397448            
+print $T
+print 0.8
+0.8
+
+#moving mesh
+fix		open1 all move/mesh mesh schieber1 rotate origin 0. 0. 0. axis  0. 1. 0. period  $T
+fix		open1 all move/mesh mesh schieber1 rotate origin 0. 0. 0. axis  0. 1. 0. period  0.8
+fix		open2 all move/mesh mesh schieber2 rotate origin 0. 0. 0. axis  0. 1. 0. period -$T
+fix		open2 all move/mesh mesh schieber2 rotate origin 0. 0. 0. axis  0. 1. 0. period -0.8
+
+#run
+run		${opensteps}
+run		8000
+Setting up run at Sun Apr 21 22:36:13 2019
+
+Memory usage per processor = 17.0634 Mbytes
+    Step    Atoms          S/CPU 
+   50000     3000              0 
+   51000     3000      271.62408 
+   52000     3000      272.56403 
+   53000     3000      272.62859 
+   54000     3000      243.57937 
+   55000     3000      314.02948 
+   56000     3000      284.33768 
+   57000     3000       303.2085 
+   58000     3000      311.80157 
+Loop time of 28.3311 on 4 procs for 8000 steps with 3000 atoms, finish time Sun Apr 21 22:36:42 2019
+
+
+Pair  time (%) = 4.16723 (14.7091)
+Neigh time (%) = 0.125328 (0.442369)
+Comm  time (%) = 1.0982 (3.87632)
+Outpt time (%) = 0.449495 (1.58658)
+Other time (%) = 22.4908 (79.3857)
+
+Nlocal:    750 ave 1493 max 0 min
+Histogram: 2 0 0 0 0 0 0 0 0 2
+Nghost:    184.75 ave 392 max 0 min
+Histogram: 2 0 0 0 0 0 0 0 1 1
+Neighs:    1775.5 ave 3617 max 0 min
+Histogram: 2 0 0 0 0 0 0 0 0 2
+
+Total # of neighbors = 7102
+Ave neighs/atom = 2.36733
+Neighbor list builds = 144
+Dangerous builds = 0
+
+unfix		open1
+unfix		open2
+
+#let material flow out
+run			150000
+Setting up run at Sun Apr 21 22:36:42 2019
+
+Memory usage per processor = 17.0705 Mbytes
+    Step    Atoms          S/CPU 
+   58000     3000              0 
+   59000     3000      421.38445 
+   60000     3000      421.83257 
+   61000     3000      311.55565 
+   62000     3000      379.76058 
+   63000     3000      466.77452 
+   64000     3000      459.60492 
+   65000     3000      461.61293 
+   66000     3000      458.02183 
+   67000     3000      456.84808 
+   68000     3000      454.90377 
+   69000     3000      444.99854 
+   70000     3000      344.55646 
+   71000     3000      343.65168 
+   72000     3000      340.14173 
+   73000     3000       353.4077 
+   74000     3000      359.77863 
+   75000     3000      390.31389 
+   76000     3000      389.98828 
+   77000     3000      429.71928 
+   78000     3000      437.44428 
+   79000     3000      440.09284 
+   80000     3000      392.89597 
+   81000     3000      341.08568 
+   82000     3000      343.67562 
+   83000     3000      368.94411 
+   84000     3000      372.35287 
+   85000     3000      370.15144 
+   86000     3000      371.97036 
+   87000     3000      322.61329 
+   88000     3000      344.31657 
+   89000     3000      391.47094 
+   90000     3000       349.6792 
+   91000     3000      325.27394 
+   92000     3000      323.66761 
+   93000     2999      302.54158 
+   94000     2999      322.62788 
+   95000     2999      292.20176 
+   96000     2999      399.02178 
+   97000     2999      379.48592 
+   98000     2998      428.68465 
+   99000     2998      452.98075 
+  100000     2997      256.05859 
+  101000     2994      333.78636 
+  102000     2993      389.47538 
+  103000     2987      338.07823 
+  104000     2982      329.12411 
+  105000     2978      341.85476 
+  106000     2974      351.08212 
+  107000     2973       360.0776 
+  108000     2972      363.79698 
+  109000     2971      369.75603 
+  110000     2964      374.90809 
+  111000     2959      365.12304 
+  112000     2951      357.09672 
+  113000     2945      360.71643 
+  114000     2939      420.93536 
+  115000     2934      350.32359 
+  116000     2933      353.58983 
+  117000     2929      377.05454 
+  118000     2927      340.82313 
+  119000     2926      422.18247 
+  120000     2925      423.65965 
+  121000     2924      382.23825 
+  122000     2924      352.38975 
+  123000     2924      361.33235 
+  124000     2922      379.61563 
+  125000     2918      378.87082 
+  126000     2914      378.08799 
+  127000     2913      371.49511 
+  128000     2912      378.10857 
+  129000     2911       346.1475 
+  130000     2910      348.39856 
+  131000     2909      353.12997 
+  132000     2909      379.64962 
+  133000     2909      378.51416 
+  134000     2909      358.31305 
+  135000     2909      371.78882 
+  136000     2907      403.77952 
+  137000     2903      333.10776 
+  138000     2896      376.50895 
+  139000     2890      379.72707 
+  140000     2889      380.04808 
+  141000     2888      386.37274 
+  142000     2887      395.34563 
+  143000     2887      392.60772 
+  144000     2887      391.84833 
+  145000     2887      406.24906 
+  146000     2887      394.27646 
+  147000     2887      391.93172 
+  148000     2887      390.59364 
+  149000     2887       389.0884 
+  150000     2887      393.35004 
+  151000     2887      395.00531 
+  152000     2886       411.1375 
+  153000     2884      496.80195 
+  154000     2881      494.03771 
+  155000     2878      486.31294 
+  156000     2873      460.04997 
+  157000     2868       475.4164 
+  158000     2867      501.43089 
+  159000     2867      503.01286 
+  160000     2867      494.12549 
+  161000     2867      501.46213 
+  162000     2867      489.66249 
+  163000     2867      492.01401 
+  164000     2867       500.0526 
+  165000     2867       489.9909 
+  166000     2867      482.73107 
+  167000     2867      497.20394 
+  168000     2867      497.10497 
+  169000     2867      495.43116 
+  170000     2866      496.64094 
+  171000     2865      499.79816 
+  172000     2865      508.61828 
