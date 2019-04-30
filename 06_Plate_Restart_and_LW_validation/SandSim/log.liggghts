@@ -173,3 +173,139 @@ Total # of neighbors = 2028710
 Ave neighs/atom = 20.2871
 Neighbor list builds = 1
 Dangerous builds = 0
+unfix ctg
+
+# Dump Files for Post-Processing --------------------------------------------------------------------
+
+dump dumpstl all stl 2000 post/cad_*.stl
+dump dmp all custom/vtk ${fdump} post/plate_*.vtk id type type x y z ix iy iz vx vy vz fx fy fz omegax omegay omegaz radius
+dump dmp all custom/vtk 1000 post/plate_*.vtk id type type x y z ix iy iz vx vy vz fx fy fz omegax omegay omegaz radius
+dump forces1 all mesh/vtk ${fdump} post/stress_*.vtk output interpolate stress stresscomponents cad1
+dump forces1 all mesh/vtk 1000 post/stress_*.vtk output interpolate stress stresscomponents cad1
+
+fix forceslog all print 200 "${time},${fx},${fy},${fz},${Mx},${My},${Mz}" file post/forces.csv title "t,Fx,Fy,Fz,Mx,My,Mz" screen no
+
+
+# Run simulation for N time steps ------------------------------------------------------------------
+
+# Move scoop into regolith surface
+
+fix moveCad1 all move/mesh mesh cad1 linear 0 0 -0.1
+run 10000
+Setting up run at Mon Apr 29 23:10:40 2019
+
+Memory usage per processor = 62.1542 Mbytes
+    Step    Atoms         KinEng            CPU 
+   30002   100000     0.15913623              0 
+   40002   100000  0.00071374799      4555.2383 
+Loop time of 4555.24 on 4 procs for 10000 steps with 100000 atoms, finish time Tue Apr 30 00:26:35 2019
+
+
+Pair  time (%) = 753.666 (16.545)
+Neigh time (%) = 1309.21 (28.7407)
+Comm  time (%) = 241.25 (5.2961)
+Outpt time (%) = 6.53649 (0.143494)
+Other time (%) = 2244.58 (49.2747)
+
+Nlocal:    25000 ave 41944 max 7733 min
+Histogram: 2 0 0 0 0 0 0 0 0 2
+Nghost:    4605.75 ave 5776 max 3451 min
+Histogram: 2 0 0 0 0 0 0 0 0 2
+Neighs:    507200 ave 854119 max 153993 min
+Histogram: 2 0 0 0 0 0 0 0 0 2
+
+Total # of neighbors = 2028800
+Ave neighs/atom = 20.288
+Neighbor list builds = 10000
+Dangerous builds = 0
+
+# Stop CAD motion
+unfix moveCad1
+run 5000
+Setting up run at Tue Apr 30 00:26:35 2019
+
+Memory usage per processor = 68.7943 Mbytes
+    Step    Atoms         KinEng            CPU 
+   40002   100000  0.00071374799              0 
+   45002   100000  4.4515283e-05      2245.7452 
+Loop time of 2245.75 on 4 procs for 5000 steps with 100000 atoms, finish time Tue Apr 30 01:04:01 2019
+
+
+Pair  time (%) = 388.811 (17.3132)
+Neigh time (%) = 672.899 (29.9633)
+Comm  time (%) = 689.335 (30.6952)
+Outpt time (%) = 3.32092 (0.147876)
+Other time (%) = 491.38 (21.8805)
+
+Nlocal:    25000 ave 41943 max 7732 min
+Histogram: 2 0 0 0 0 0 0 0 0 2
+Nghost:    4604 ave 5770 max 3450 min
+Histogram: 2 0 0 0 0 0 0 0 0 2
+Neighs:    507207 ave 854076 max 153962 min
+Histogram: 2 0 0 0 0 0 0 0 0 2
+
+Total # of neighbors = 2028827
+Ave neighs/atom = 20.2883
+Neighbor list builds = 5000
+Dangerous builds = 0
+
+# Move scoop through regolith surface
+fix moveCad2 all move/mesh mesh cad1 linear 0 0.005 0
+run 5000
+Setting up run at Tue Apr 30 01:04:01 2019
+
+Memory usage per processor = 68.7943 Mbytes
+    Step    Atoms         KinEng            CPU 
+   45002   100000  4.4515283e-05              0 
+   50002   100000  6.5338285e-05      1932.7731 
+Loop time of 1932.77 on 4 procs for 5000 steps with 100000 atoms, finish time Tue Apr 30 01:36:15 2019
+
+
+Pair  time (%) = 345.46 (17.8738)
+Neigh time (%) = 596.201 (30.8469)
+Comm  time (%) = 90.2388 (4.66888)
+Outpt time (%) = 3.14511 (0.162725)
+Other time (%) = 897.729 (46.4477)
+
+Nlocal:    25000 ave 41945 max 7733 min
+Histogram: 2 0 0 0 0 0 0 0 0 2
+Nghost:    4605 ave 5776 max 3454 min
+Histogram: 2 0 0 0 0 0 0 0 0 2
+Neighs:    507122 ave 854192 max 154016 min
+Histogram: 2 0 0 0 0 0 0 0 0 2
+
+Total # of neighbors = 2028490
+Ave neighs/atom = 20.2849
+Neighbor list builds = 5000
+Dangerous builds = 0
+
+# Stop CAD motion
+unfix moveCad2
+
+run 5000
+Setting up run at Tue Apr 30 01:36:15 2019
+
+Memory usage per processor = 68.7943 Mbytes
+    Step    Atoms         KinEng            CPU 
+   50002   100000  6.5338285e-05              0 
+   55002   100000  4.5214631e-06       2195.453 
+Loop time of 2195.45 on 4 procs for 5000 steps with 100000 atoms, finish time Tue Apr 30 02:12:51 2019
+
+
+Pair  time (%) = 381.332 (17.3692)
+Neigh time (%) = 658.423 (29.9903)
+Comm  time (%) = 676.144 (30.7975)
+Outpt time (%) = 3.18068 (0.144876)
+Other time (%) = 476.374 (21.6982)
+
+Nlocal:    25000 ave 41945 max 7733 min
+Histogram: 2 0 0 0 0 0 0 0 0 2
+Nghost:    4604.75 ave 5775 max 3454 min
+Histogram: 2 0 0 0 0 0 0 0 0 2
+Neighs:    507116 ave 854193 max 154010 min
+Histogram: 2 0 0 0 0 0 0 0 0 2
+
+Total # of neighbors = 2028465
+Ave neighs/atom = 20.2846
+Neighbor list builds = 5000
+Dangerous builds = 0
