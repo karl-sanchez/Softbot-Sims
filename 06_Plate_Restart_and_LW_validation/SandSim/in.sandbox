@@ -13,23 +13,22 @@ variable rho equal 1260
 
 variable nmaterials equal 2
 
-
-variable nP equal 1000000
+variable nP equal 100000
 variable tStep equal 1.0e-4
 variable prate equal 50000
 variable tSettle equal ${nP}/${prate}/${tStep}+1/${tStep}
 
 print "tSettle = ${tSettle}"
 
-variable minRad equal 0.003
+variable minRad equal 0.005
 variable ndist equal 2*${minRad}
 
 variable yhi equal 0.5
 variable ylo equal -0.1
-variable xhi equal 0.3
-variable xlo equal -0.3
+variable xhi equal 0.2
+variable xlo equal -0.2
 variable zhi equal 0.3
-variable zlo equal -0.2
+variable zlo equal -0.3
 
 variable fdump equal 1000
 
@@ -56,12 +55,11 @@ neigh_modify every 1 check no delay 0
 
 # Material and interaction properties required
 fix m1 all property/global youngsModulus peratomtype ${youngmod} ${youngmod}
-fix m2 all property/global poissonsRatio peratomtype 0.3 0.3
+fix m2 all property/global poissonsRatio peratomtype ${poisson} ${poisson}
 fix m3 all property/global coefficientRestitution peratomtypepair 2 ${crest} ${crest} ${crest} ${crest}
 fix m4 all property/global coefficientFriction peratomtypepair 2 ${cfric} 0 0 ${cfric}
 
 # Particle insertion
-
 fix pts1 all particletemplate/sphere 49979693 atom_type 1 density constant ${rho} radius constant ${minRad}
 fix pdd all particledistribution/discrete 32452843 1 pts1 1.0
 
