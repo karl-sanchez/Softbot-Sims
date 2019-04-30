@@ -13,19 +13,19 @@ variable rho equal 1260
 
 variable nmaterials equal 2
 
-variable nP equal 6000
+variable nP equal 16000
 variable tStep equal 1.0e-4
-variable prate equal 50000
+variable prate equal 9000
 variable tSettle equal ${nP}/${prate}/${tStep}+1/${tStep}
 
 print "tSettle = ${tSettle}"
 
-variable minRad equal 0.005
+variable minRad equal 0.01
 variable ndist equal 2*${minRad}
 
-variable rcyl equal 0.3
+variable rcyl equal 0.35
 variable zbottom equal -0.5
-variable ztop equal 0.5
+variable ztop equal 0.6
 
 variable fdump equal 1000
 
@@ -40,7 +40,7 @@ newton off
 communicate single vel yes
 
 # Declare domain
-region domain cylinder z 0 0 ${rcyl} ${zbottom} 0.5 units box
+region domain cylinder z 0 0 ${rcyl} ${zbottom} ${ztop} units box
 create_box 2 domain
 
 # Neighbor listing
@@ -61,7 +61,7 @@ fix m6 all property/global coefficientRollingFriction peratomtypepair 2 0.04 0.0
 # Particle insertion
 
 fix pts1 all particletemplate/sphere 49979693 atom_type 1 density constant ${rho} radius constant ${minRad}
-fix pts2 all particletemplate/sphere 15485863 atom_type 1 density constant ${rho} radius constant 0.01
+fix pts2 all particletemplate/sphere 15485863 atom_type 1 density constant ${rho} radius constant 0.02
 fix pts3 all particletemplate/sphere 15485867 atom_type 1 density constant ${rho} radius constant 0.03
 fix pts4 all particletemplate/sphere 67867967 atom_type 1 density constant ${rho} radius constant 0.05
 fix pdd all particledistribution/discrete 32452843 4 pts1 0.60 pts2 0.25 pts3 0.1 pts4 0.05
@@ -75,7 +75,7 @@ overlapcheck yes vel constant 0. 0. 0. region reservoir ntry_mc 10000
 
 
 # Define the physics
-pair_style gran model hertz tangential history cohesion sjkr rolling_friction cdt
+pair_style gran model hertz tangential history cohesion sjkr
 pair_coeff * *
 
 
