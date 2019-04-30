@@ -13,7 +13,7 @@ variable rho equal 1260
 
 variable nmaterials equal 2
 
-variable nP equal 100000
+variable nP equal 6000
 variable tStep equal 1.0e-4
 variable prate equal 50000
 variable tSettle equal ${nP}/${prate}/${tStep}+1/${tStep}
@@ -23,12 +23,9 @@ print "tSettle = ${tSettle}"
 variable minRad equal 0.005
 variable ndist equal 2*${minRad}
 
-variable yhi equal 0.5
-variable ylo equal -0.1
-variable xhi equal 0.2
-variable xlo equal -0.2
-variable zhi equal 0.3
-variable zlo equal -0.3
+variable rcyl equal 0.3
+variable zbottom equal -0.5
+variable ztop equal 0.5
 
 variable fdump equal 1000
 
@@ -43,7 +40,7 @@ newton off
 communicate single vel yes
 
 # Declare domain
-region domain block ${xlo} ${xhi} ${ylo} ${yhi} ${zlo} ${zhi} units box
+region domain cylinder z 0 0 ${rcyl} ${zbottom} 0.5 units box
 create_box 2 domain
 
 # Neighbor listing
@@ -70,7 +67,7 @@ fix pts4 all particletemplate/sphere 67867967 atom_type 1 density constant ${rho
 fix pdd all particledistribution/discrete 32452843 4 pts1 0.60 pts2 0.25 pts3 0.1 pts4 0.05
 
 
-region reservoir cylinder z 0 0 ${rcyl} ${rbottom} 0 units box
+region reservoir cylinder z 0 0 ${rcyl} 0 ${ztop} units box
 
 fix ins all insert/rate/region seed 49979687 distributiontemplate pdd &
 nparticles ${nP} particlerate ${prate} insert_every 1000 &
@@ -85,7 +82,7 @@ pair_coeff * *
 ### Import CAD / Generate Solids --------------------------------------------------------------------
 
 # Add a granular wall at the floor of the bounding box too
-fix zwalls all wall/gran model hertz tangential history primitive type 1 zplane ${rbottom}
+fix zwalls all wall/gran model hertz tangential history primitive type 1 zplane ${zbottom}
 fix cylwall all wall/gran model hertz tangential history primitive type 1 zcylinder ${rcyl} 0 0 
 
 ### Detailed Settings -------------------------------------------------------------------------------
@@ -115,6 +112,10 @@ dump dmp all custom/vtk 1000 postInit/plate_*.vtk id type type x y z ix iy iz vx
 
 # Allow Particles to settle
 run ${tSettle}
+
+fix mgrav all gravity 9.81e-06 vector 0.0 0.0 -1.0
+
+run 5000
 
 # Save Reservoir for future use
 
