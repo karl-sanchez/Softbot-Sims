@@ -115,7 +115,7 @@ dump dmp all custom/vtk 1000 postInit/plate_*.vtk id type type x y z ix iy iz vx
 run ${tSettle}
 
 # Change Gravity and re-settle
-fix grav all gravity 9.81e-06 vector 0.0 0.0 0.2
+fix grav all gravity 9.81e-06 vector 0.0 0.0 -1.0
 # Add a temporary ceiling to keep things from flying everywhere
 fix tempWall all wall/gran model hertz tangential history primitive type 1 zplane 0.05
 variable settle2 equal 2.5/${tStep}

@@ -3,22 +3,37 @@
 ### allowing them to settle under the force of gravity, and then accelerating
 
 
-### Variables
-variable vmax equal 0.25
-variable accel equal 0.75
+### Variables ----------------------------------------------------------------------------------------
 
+variable youngmod equal 1.0e7
+variable poisson equal 0.3
+variable crest equal 0.65
+variable cfric equal 1
+variable rho equal 3110
 
-variable nP equal 10000
-variable tStep equal 1.0e-4
-variable prate equal 200
+variable nmaterials equal 2
+
+variable nP equal 4000
+variable tStep equal 1.0e-5
+variable prate equal 9000
 variable tSettle equal ${nP}/${prate}/${tStep}+1/${tStep}
 
-variable minRad equal 0.005
+print "tSettle = ${tSettle}"
+
+variable minRad equal 0.01
 variable ndist equal 2*${minRad}
+
+variable yhi equal 0.6
+variable ylo equal -0.6
+variable xhi equal 0.6
+variable xlo equal -0.6
+variable zhi equal 0.0
+variable zlo equal -4.0
 
 variable fdump equal 1000
 
-### Initialization
+
+### Initialization -----------------------------------------------------------------------------------
 
 units si
 atom_style sphere
@@ -28,21 +43,22 @@ newton off
 communicate single vel yes
 
 # Declare domain
-region domain block -0.6 0.6 -0.6 0.6 0 4.0 units box
+region domain block ${xlo} ${xhi} ${ylo} ${yhi} ${zlo} ${zhi} units box
 create_box 2 domain
 
 # Neighbor listing
 neighbor ${ndist} bin
 neigh_modify every 1 check no delay 0
 
+
 ### Setup -------------------------------------------------------------------------------------------
 
 # Material and interaction properties required
-fix m1 all property/global youngsModulus peratomtype 1.0e7 1.0e7
-fix m2 all property/global poissonsRatio peratomtype 0.25 0.25
-fix m3 all property/global coefficientRestitution peratomtypepair 2 0.65 0.65 0.65 0.65
-fix m4 all property/global coefficientFriction peratomtypepair 2 1 1 1 1
-fix m5 all property/global cohesionEnergyDensity peratomtypepair 2 200 20 20 200
+fix m1 all property/global youngsModulus peratomtype ${youngmod} ${youngmod}
+fix m2 all property/global poissonsRatio peratomtype ${poisson} ${poisson}
+fix m3 all property/global coefficientRestitution peratomtypepair 2 ${crest} ${crest} ${crest} ${crest}
+fix m4 all property/global coefficientFriction peratomtypepair 2 ${cfric} 0 0 ${cfric}
+fix m5 all property/global cohesionEnergyDensity peratomtypepair 2 100 0 0 100
 fix m6 all property/global coefficientRollingFriction peratomtypepair 2 0.04 0.04 0.04 0.04
 
 # Particle insertion
@@ -59,12 +75,12 @@ fix pdd all particledistribution/discrete 32452843 4 pts1 0.60 pts2 0.25 pts3 0.
 region reservoir block -0.1 0.1 -0.1 0.1 0.5 0.6 units box
 
 fix ins all insert/rate/region seed 49979687 distributiontemplate pdd &
-nparticles ${nP} particlerate 50 insert_every 1000 &
+nparticles ${nP} particlerate ${prate} insert_every 1000 &
 overlapcheck yes vel constant 0. 0. 0. region reservoir ntry_mc 10000
 
 
 # Define the physics
-pair_style gran model hertz tangential history cohesion sjkr rolling_friction cdt
+pair_style gran model hertz tangential history cohesion sjkr
 pair_coeff * *
 
 
@@ -128,9 +144,13 @@ title "t,Fx,Fy,Fz,Mx,My,Mz" screen no
 # Allow Particles to settle
 run ${tSettle}
 
-# Gravity
-fix grav all gravity 0.00000981 vector 0.0 0.0 -1.0
-run 10000
+# Change Gravity and re-settle
+fix grav all gravity 9.81e-06 vector 0.0 0.0 -1.0
+# Add a temporary ceiling to keep things from flying everywhere
+fix tempWall all wall/gran model hertz tangential history primitive type 1 zplane 0.1
+variable settle2 equal 2.5/${tStep}
+run settle2
+unfix tempWall
 
 variable vx equal 0.0
 variable vy equal 0.0
