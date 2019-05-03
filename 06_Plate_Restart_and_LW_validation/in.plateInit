@@ -9,14 +9,14 @@ variable youngmod equal 1.0e7
 variable poisson equal 0.3
 variable crest equal 0.65
 variable cfric equal 1
-variable rho equal 1260
+variable rho equal 3110
 
 variable nmaterials equal 2
 
 variable nP equal 20000
-variable tStep equal 1.0e-4
+variable tStep equal 1.0e-5
 variable prate equal 9000
-variable tSettle equal ${nP}/${prate}/${tStep}+1/${tStep}
+variable tSettle equal ${nP}/${prate}/${tStep}+2/${tStep}
 
 print "tSettle = ${tSettle}"
 
@@ -82,7 +82,8 @@ pair_coeff * *
 ### Import CAD / Generate Solids --------------------------------------------------------------------
 
 # Add a granular wall at the floor of the bounding box too
-fix zwalls all wall/gran model hertz tangential history primitive type 1 zplane ${zbottom}
+fix zwalls1 all wall/gran model hertz tangential history primitive type 1 zplane ${zbottom}
+fix zwalls2 all wall/gran model hertz tangential history primitive type 1 zplane ${ztop}
 fix cylwall all wall/gran model hertz tangential history primitive type 1 zcylinder ${rcyl} 0 0 
 
 ### Detailed Settings -------------------------------------------------------------------------------
@@ -113,9 +114,14 @@ dump dmp all custom/vtk 1000 postInit/plate_*.vtk id type type x y z ix iy iz vx
 # Allow Particles to settle
 run ${tSettle}
 
-fix mgrav all gravity 9.81e-06 vector 0.0 0.0 -1.0
+# Change Gravity and re-settle
+fix grav all gravity 9.81e-06 vector 0.0 0.0 0.2
+# Add a temporary ceiling to keep things from flying everywhere
+fix tempWall all wall/gran model hertz tangential history primitive type 1 zplane 0.05
+variable settle2 equal 2.5/${tStep}
+run settle2
+unfix tempWall
 
-run 5000
 
 # Save Reservoir for future use
 
